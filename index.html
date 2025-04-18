@@ -7,12 +7,11 @@
     <title>Chord Progression MIDI Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="styles.css">
-    </style>
 </head>
 
-<body class="bg-gray-100 p-4 md:p-8">
+<body class="bg-gray-100 p-4 md:p-8 font-sans">
 
-    <div class="max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-lg shadow-md">
+    <div class="max-w-3xl mx-auto bg-white p-6 md:p-8 rounded-lg shadow-md">
         <h1 class="text-2xl md:text-3xl font-bold mb-6 text-gray-800 text-center">Chord Progression MIDI Generator</h1>
 
         <form id="midiForm" class="space-y-5">
@@ -22,7 +21,6 @@
                     class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                     placeholder="e.g., Dm9 G7 Cmaj7 Fmaj7"></textarea>
                 <p class="text-xs text-gray-500 mt-1">Enter space-separated chord symbols.</p>
-
                 <div class="mt-3 p-3 bg-sky-50 border border-sky-200 rounded-md text-sm text-sky-800">
                     <span class="font-bold">💡 Quick Workflow:</span>
                     <p class="mt-1">Ask your favorite AI (like ChatGPT, Gemini or Claude) for a chord progression text
@@ -30,6 +28,7 @@
                         click generate to quickly hear and explore new ideas!</p>
                 </div>
             </div>
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label for="outputFileName" class="block text-sm font-medium text-gray-700 mb-1">Output Filename
@@ -43,8 +42,6 @@
                     <input type="number" id="tempo" name="tempo" value="120" min="20" max="300"
                         class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                 </div>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label for="baseOctave" class="block text-sm font-medium text-gray-700 mb-1">Base Octave:</label>
                     <select id="baseOctave" name="baseOctave"
@@ -60,12 +57,12 @@
                         Duration:</label>
                     <select id="chordDuration" name="chordDuration"
                         class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white">
-                        <option value="16">Sixteenth Note (16)</option>
-                        <option value="8">Eighth Note (8)</option>
-                        <option value="d4">Dotted Quarter (d4)</option>
-                        <option value="4">Quarter Note (4)</option>
-                        <option value="d2">Dotted Half (d2)</option>
-                        <option value="2">Half Note (2)</option>
+                        <option value="16">Sixteenth Note</option>
+                        <option value="8">Eighth Note</option>
+                        <option value="d4">Dotted Quarter</option>
+                        <option value="4">Quarter Note</option>
+                        <option value="d2">Dotted Half</option>
+                        <option value="2">Half Note</option>
                         <option value="1" selected>Whole Note</option>
                         <option value="T1024">2 Whole Notes</option>
                         <option value="T1536">3 Whole Notes</option>
@@ -73,12 +70,14 @@
                     </select>
                 </div>
             </div>
+
             <div>
                 <label for="velocity" class="block text-sm font-medium text-gray-700 mb-1">Velocity (Loudness): <span
                         id="velocityValue" class="font-semibold">90</span></label>
                 <input type="range" id="velocity" name="velocity" min="1" max="127" value="90"
                     class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
             </div>
+
             <div class="flex items-center space-x-4">
                 <div class="flex items-center h-5">
                     <input id="addBassNote" name="addBassNote" type="checkbox"
@@ -97,21 +96,29 @@
                     <label for="doInversion" class="font-medium text-gray-700">Use 1st Inversion</label>
                 </div>
             </div>
+
             <div>
                 <button type="submit"
                     class="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                    Generate & Download MIDI
+                    Generate Preview & MIDI Link
                 </button>
             </div>
         </form>
 
-        <div id="status" class="mt-6 text-center text-sm text-gray-600"></div>
-    </div>
+        <div id="status" class="mt-6 text-center text-sm text-gray-600">Enter a progression and click generate.</div>
+
+        <div class="mt-6">
+            <h2 class="text-lg font-medium text-gray-700 mb-2 text-center">Piano Roll Preview</h2>
+            <canvas id="pianoRollCanvas"></canvas>
+            <p class="text-xs text-gray-500 mt-1 text-center">Visual representation of the generated notes.</p>
+        </div>
+
+        <div id="downloadLinkContainer" class="mt-4 text-center">
+        </div>
 
     </div>
-    </div>
-    <div class="flex flex-col items-center mt-8 mb-4 space-y-2"> <a href="https://github.com/1legality" target="_blank"
-            rel="noopener noreferrer"
+    <div class="flex flex-col items-center mt-8 mb-4 space-y-2">
+        <a href="https://github.com/1legality" target="_blank" rel="noopener noreferrer"
             class="inline-flex items-center px-4 py-2 bg-gray-900 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition duration-150 ease-in-out">
             <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
                 <path fill-rule="evenodd"
@@ -120,7 +127,6 @@
             GitHub
         </a>
         <p class="text-xs text-gray-500">Made with <i>VIBE</i></p>
-    </div>
     </div>
 
     <script src="dist/bundle.js" defer></script>
