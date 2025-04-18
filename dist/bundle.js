@@ -1275,6 +1275,15 @@
         }
         let lastGeneratedNotes = [];
         const resizeCanvas = () => {
+          const dpr = window.devicePixelRatio || 1;
+          pianoRollCanvas.width = pianoRollCanvas.clientWidth * dpr;
+          pianoRollCanvas.height = pianoRollCanvas.clientHeight * dpr;
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          if (lastGeneratedNotes.length === 0) {
+            drawPianoRoll([], pianoRollCanvas, ctx);
+          } else {
+            drawPianoRoll(lastGeneratedNotes, pianoRollCanvas, ctx);
+          }
         };
         velocitySlider.addEventListener("input", (event) => {
           velocityValueSpan.textContent = event.target.value;

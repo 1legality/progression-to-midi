@@ -231,7 +231,26 @@ function setupMidiForm() {
     let lastGeneratedNotes: NoteData[] = [];
 
     // --- Canvas Resizing Function (Keep as is) ---
-    const resizeCanvas = () => { /* ... keep existing resize logic ... */ };
+    const resizeCanvas = () => {
+        const dpr = window.devicePixelRatio || 1;
+        // Set actual buffer size
+        pianoRollCanvas.width = pianoRollCanvas.clientWidth * dpr;
+        pianoRollCanvas.height = pianoRollCanvas.clientHeight * dpr;
+    
+        // Scale the drawing context to match CSS pixels
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // Use setTransform for clean scaling
+    
+        // ---> IMPORTANT: Redraw after resizing <---
+        // You might need to redraw the *current* notes after resizing
+        // If you store the notes (e.g., lastGeneratedNotes), redraw them here:
+        // drawPianoRoll(lastGeneratedNotes, pianoRollCanvas, ctx);
+        // Or at least redraw the empty grid if no notes generated yet:
+         if (lastGeneratedNotes.length === 0) {
+           drawPianoRoll([], pianoRollCanvas, ctx);
+         } else {
+           drawPianoRoll(lastGeneratedNotes, pianoRollCanvas, ctx);
+         }
+    };
 
     // --- Update velocity display (Keep as is) ---
     velocitySlider.addEventListener('input', (event) => {
