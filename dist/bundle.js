@@ -1073,7 +1073,28 @@
     "main.ts"() {
       var import_midi_writer_js = __toESM(require_build());
       var NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-      var INTERVALS = { P1: 0, m2: 1, M2: 2, m3: 3, M3: 4, P4: 5, A4: 6, d5: 6, P5: 7, A5: 8, m6: 8, M6: 9, d7: 9, m7: 10, M7: 11, P8: 12, m9: 13, M9: 14, P11: 17, M13: 21 };
+      var INTERVALS = {
+        P1: 0,
+        m2: 1,
+        M2: 2,
+        m3: 3,
+        M3: 4,
+        P4: 5,
+        A4: 6,
+        d5: 6,
+        P5: 7,
+        A5: 8,
+        m6: 8,
+        M6: 9,
+        d7: 9,
+        m7: 10,
+        M7: 11,
+        P8: 12,
+        m9: 13,
+        M9: 14,
+        P11: 17,
+        M13: 21
+      };
       var CHORD_FORMULAS = {
         "": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5],
         "maj": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5],
@@ -1098,6 +1119,7 @@
         "maj13": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M7, INTERVALS.M9, INTERVALS.M13],
         "m13": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.M13]
       };
+      var TPQN = 128;
       function normalizeNoteName(note) {
         const name = note.toUpperCase();
         switch (name) {
@@ -1131,126 +1153,302 @@
         const noteIndex = getNoteIndex(noteName);
         const midiVal = 12 * (octave + 1) + noteIndex;
         if (midiVal < 0 || midiVal > 127) {
-          console.warn(`Calculated MIDI note ${midiVal} for ${noteName}${octave} is out of range (0-127).`);
+          console.warn(`Calculated MIDI note ${midiVal} for ${noteName}${octave} is out of range (0-127). Clamping may occur.`);
         }
-        return midiVal;
+        return Math.max(0, Math.min(127, midiVal));
+      }
+      function getDurationTicks(durationCode) {
+        switch (durationCode) {
+          case "16":
+            return TPQN / 4;
+          case "8":
+            return TPQN / 2;
+          case "d4":
+            return TPQN * 1.5;
+          case "4":
+            return TPQN;
+          case "d2":
+            return TPQN * 3;
+          case "2":
+            return TPQN * 2;
+          case "1":
+            return TPQN * 4;
+          case "T1024":
+            return 1024;
+          case "T1536":
+            return 1536;
+          case "T2048":
+            return 2048;
+          default:
+            console.warn(`Unknown duration code: ${durationCode}. Defaulting to quarter note (${TPQN} ticks).`);
+            return TPQN;
+        }
+      }
+      function drawPianoRoll(notesData, canvas, ctx, options = {}) {
+        const {
+          noteColor = "#2563eb",
+          // Default blue notes
+          backgroundColor = "#f9fafb",
+          // Default light gray background
+          gridColor = "#e5e7eb"
+          // Default lighter gray grid
+        } = options;
+        const canvasWidth = canvas.clientWidth;
+        const canvasHeight = canvas.clientHeight;
+        ctx.fillStyle = backgroundColor;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (notesData.length === 0) {
+          ctx.save();
+          const dpr2 = window.devicePixelRatio || 1;
+          ctx.setTransform(dpr2, 0, 0, dpr2, 0, 0);
+          ctx.fillStyle = "#6b7280";
+          ctx.font = "14px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText("No notes to display", canvasWidth / 2, canvasHeight / 2);
+          ctx.restore();
+          return;
+        }
+        let minMidi = 127;
+        let maxMidi = 0;
+        let maxTimeTicks = 0;
+        notesData.forEach((note) => {
+          minMidi = Math.min(minMidi, note.midiNote);
+          maxMidi = Math.max(maxMidi, note.midiNote);
+          maxTimeTicks = Math.max(maxTimeTicks, note.startTimeTicks + note.durationTicks);
+        });
+        minMidi = Math.max(0, minMidi - 2);
+        maxMidi = Math.min(127, maxMidi + 2);
+        const midiRange = maxMidi - minMidi + 1;
+        if (maxTimeTicks > 0) {
+          maxTimeTicks += 1;
+        }
+        const noteHeight = canvasHeight / midiRange;
+        const timeScale = maxTimeTicks > 0 ? canvasWidth / maxTimeTicks : 0;
+        ctx.strokeStyle = gridColor;
+        const dpr = window.devicePixelRatio || 1;
+        ctx.lineWidth = 0.5 * dpr;
+        for (let midi = minMidi; midi <= maxMidi; midi++) {
+          if (midi % 12 === 0) {
+            const y = canvasHeight - (midi - minMidi + 0.5) * noteHeight;
+            ctx.beginPath();
+            ctx.moveTo(0, y * dpr);
+            ctx.lineTo(canvas.width, y * dpr);
+            ctx.stroke();
+          }
+        }
+        ctx.fillStyle = noteColor;
+        if (timeScale > 0) {
+          notesData.forEach((note) => {
+            const x = note.startTimeTicks * timeScale;
+            const y = canvasHeight - (note.midiNote - minMidi + 1) * noteHeight;
+            const width = note.durationTicks * timeScale;
+            const height = noteHeight;
+            ctx.fillRect(
+              x * dpr,
+              // No inset on x
+              y * dpr,
+              // No inset on y
+              Math.max(1 * dpr, width * dpr),
+              // No inset on width
+              Math.max(1 * dpr, height * dpr)
+              // No inset on height
+            );
+          });
+        }
       }
       function setupMidiForm() {
         const form = document.getElementById("midiForm");
         const statusDiv = document.getElementById("status");
         const velocitySlider = document.getElementById("velocity");
         const velocityValueSpan = document.getElementById("velocityValue");
-        if (!form || !statusDiv || !velocitySlider || !velocityValueSpan) {
-          console.error("Form elements not found!");
+        const pianoRollCanvas = document.getElementById("pianoRollCanvas");
+        const downloadMidiOnlyButton = document.getElementById("downloadMidiOnlyButton");
+        if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton) {
+          console.error("Form, display elements, or download button not found!");
           if (statusDiv) statusDiv.textContent = "Error: Could not find necessary HTML elements.";
           return;
         }
+        const ctx = pianoRollCanvas.getContext("2d", { alpha: false });
+        if (!ctx) {
+          console.error("Could not get 2D context for canvas");
+          return;
+        }
+        let lastGeneratedNotes = [];
+        const resizeCanvas = () => {
+          const dpr = window.devicePixelRatio || 1;
+          pianoRollCanvas.width = pianoRollCanvas.clientWidth * dpr;
+          pianoRollCanvas.height = pianoRollCanvas.clientHeight * dpr;
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          if (lastGeneratedNotes.length === 0) {
+            drawPianoRoll([], pianoRollCanvas, ctx);
+          } else {
+            drawPianoRoll(lastGeneratedNotes, pianoRollCanvas, ctx);
+          }
+        };
         velocitySlider.addEventListener("input", (event) => {
           velocityValueSpan.textContent = event.target.value;
         });
         form.addEventListener("submit", (event) => {
           event.preventDefault();
-          statusDiv.textContent = "Generating MIDI...";
+          statusDiv.textContent = "Generating preview and MIDI...";
           statusDiv.classList.remove("text-red-600", "text-green-600");
           statusDiv.classList.add("text-gray-600");
-          try {
-            const formData = new FormData(form);
-            const progressionString = formData.get("progression");
-            const outputFileName = formData.get("outputFileName") || "progression";
-            const addBassNote = formData.has("addBassNote");
-            const doInversion = formData.has("doInversion");
-            const baseOctave = parseInt(formData.get("baseOctave"), 10);
-            const chordDuration = formData.get("chordDuration");
-            const tempo = parseInt(formData.get("tempo"), 10);
-            const velocity = parseInt(formData.get("velocity"), 10);
-            if (!progressionString || progressionString.trim() === "") {
-              throw new Error("Chord progression cannot be empty.");
-            }
-            const finalFileName = outputFileName.endsWith(".mid") ? outputFileName : `${outputFileName}.mid`;
-            const track = new import_midi_writer_js.default.Track();
-            track.setTempo(tempo);
-            track.setTimeSignature(4, 4, 24, 8);
-            const chordSymbols = progressionString.trim().split(/\s+/);
-            const chordRegex = /^([A-G][#b]?)(.*)$/;
-            for (const symbol of chordSymbols) {
-              if (!symbol) continue;
-              const match = symbol.match(chordRegex);
-              if (!match) {
-                console.warn(`Could not parse chord symbol: "${symbol}". Skipping.`);
-                track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: chordDuration, duration: chordDuration, velocity: 0 }));
-                continue;
-              }
-              const rootNoteName = match[1];
-              const qualityAndExtensions = match[2];
-              try {
-                const rootMidi = getMidiNote(rootNoteName, baseOctave);
-                let formulaIntervals = CHORD_FORMULAS[qualityAndExtensions];
-                if (formulaIntervals === void 0) {
-                  if (qualityAndExtensions === "") {
-                    formulaIntervals = CHORD_FORMULAS[""];
-                  } else {
-                    console.warn(`Chord quality "${qualityAndExtensions}" not found for "${symbol}". Defaulting to major triad.`);
-                    formulaIntervals = CHORD_FORMULAS[""];
-                  }
-                }
-                let chordMidiNotes = formulaIntervals.map((intervalSemitones) => rootMidi + intervalSemitones);
-                if (doInversion && chordMidiNotes.length > 1) {
-                  chordMidiNotes.sort((a, b) => a - b);
-                  const lowestNote = chordMidiNotes.shift();
-                  if (lowestNote !== void 0) {
-                    chordMidiNotes.push(lowestNote + 12);
-                  }
-                  chordMidiNotes.sort((a, b) => a - b);
-                }
-                let eventNotes = [...chordMidiNotes];
-                if (addBassNote) {
-                  const bassNoteMidi = rootMidi - 12;
-                  if (!eventNotes.length || bassNoteMidi < Math.min(...eventNotes)) {
-                    if (bassNoteMidi >= 0) {
-                      eventNotes.unshift(bassNoteMidi);
-                    } else {
-                      console.warn(`Calculated bass note ${bassNoteMidi} for ${symbol} is below MIDI range 0. Skipping bass note.`);
-                    }
-                  }
-                }
-                eventNotes = eventNotes.filter((note) => note >= 0 && note <= 127);
-                eventNotes = [...new Set(eventNotes)];
-                if (eventNotes.length > 0) {
-                  track.addEvent(new import_midi_writer_js.default.NoteEvent({
-                    pitch: eventNotes,
-                    duration: chordDuration,
-                    velocity
-                  }));
-                } else {
-                  console.warn(`No valid MIDI notes generated for chord "${symbol}". Adding rest.`);
-                  track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: chordDuration, duration: chordDuration, velocity: 0 }));
-                }
-              } catch (error) {
-                console.error(`Error processing chord "${symbol}" for MIDI: ${error.message}. Adding rest.`);
-                statusDiv.textContent = `Error processing chord "${symbol}": ${error.message}`;
-                statusDiv.classList.replace("text-gray-600", "text-red-600");
-                track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: chordDuration, duration: chordDuration, velocity: 0 }));
-              }
-            }
-            const writer = new import_midi_writer_js.default.Writer([track]);
-            const midiData = writer.buildFile();
-            const blob = new Blob([midiData], { type: "audio/midi" });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = finalFileName;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-            statusDiv.textContent = `MIDI file "${finalFileName}" prepared for download!`;
+          lastGeneratedNotes = [];
+          const generationResult = generateMidiData(form);
+          if (generationResult) {
+            const { notesForPianoRoll, midiBlob, finalFileName } = generationResult;
+            lastGeneratedNotes = [...notesForPianoRoll];
+            resizeCanvas();
+            drawPianoRoll(lastGeneratedNotes, pianoRollCanvas, ctx);
+            statusDiv.textContent = `Preview generated.`;
             statusDiv.classList.replace("text-gray-600", "text-green-600");
-          } catch (error) {
-            console.error("Error generating MIDI:", error);
-            statusDiv.textContent = `Error: ${error.message}`;
+          } else {
+            statusDiv.textContent = `Error generating MIDI. Check console for details.`;
+            statusDiv.classList.replace("text-gray-600", "text-red-600");
+            lastGeneratedNotes = [];
+            const dpr = window.devicePixelRatio || 1;
+            ctx.fillStyle = "#f9fafb";
+            ctx.fillRect(0, 0, pianoRollCanvas.width, pianoRollCanvas.height);
+            ctx.save();
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.fillStyle = "#ef4444";
+            ctx.font = "14px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("Error generating preview", pianoRollCanvas.clientWidth / 2, pianoRollCanvas.clientHeight / 2);
+            ctx.restore();
+          }
+        });
+        downloadMidiOnlyButton.addEventListener("click", (event) => {
+          event.preventDefault();
+          statusDiv.textContent = "Generating MIDI file...";
+          statusDiv.classList.remove("text-red-600", "text-green-600");
+          statusDiv.classList.add("text-gray-600");
+          const generationResult = generateMidiData(form);
+          if (generationResult) {
+            const { midiBlob, finalFileName } = generationResult;
+            triggerDownload(midiBlob, finalFileName);
+            statusDiv.textContent = `MIDI file "${finalFileName}" download initiated.`;
+            statusDiv.classList.replace("text-gray-600", "text-green-600");
+          } else {
+            statusDiv.textContent = `Error generating MIDI. Check console for details.`;
             statusDiv.classList.replace("text-gray-600", "text-red-600");
           }
         });
+        let resizeTimeout;
+        window.addEventListener("resize", () => {
+          clearTimeout(resizeTimeout);
+          resizeTimeout = window.setTimeout(resizeCanvas, 100);
+        });
+        resizeCanvas();
+      }
+      function triggerDownload(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }
+      function generateMidiData(form) {
+        try {
+          const formData = new FormData(form);
+          const progressionString = formData.get("progression");
+          const outputFileName = formData.get("outputFileName") || "progression";
+          const addBassNote = formData.has("addBassNote");
+          const doInversion = formData.has("doInversion");
+          const baseOctave = parseInt(formData.get("baseOctave"), 10);
+          const chordDurationStr = formData.get("chordDuration");
+          const tempo = parseInt(formData.get("tempo"), 10);
+          const velocity = parseInt(formData.get("velocity"), 10);
+          if (!progressionString || progressionString.trim() === "") {
+            throw new Error("Chord progression cannot be empty.");
+          }
+          const finalFileName = outputFileName.endsWith(".mid") ? outputFileName : `${outputFileName}.mid`;
+          const chordDurationTicks = getDurationTicks(chordDurationStr);
+          const track = new import_midi_writer_js.default.Track();
+          track.setTempo(tempo);
+          track.setTimeSignature(4, 4, 24, 8);
+          const notesForPianoRoll = [];
+          let currentTick = 0;
+          const chordSymbols = progressionString.trim().split(/\s+/);
+          const chordRegex = /^([A-G][#b]?)(.*)$/;
+          for (const symbol of chordSymbols) {
+            if (!symbol) continue;
+            const match = symbol.match(chordRegex);
+            if (!match) {
+              console.warn(`Could not parse chord symbol: "${symbol}". Skipping.`);
+              track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordDurationTicks, duration: "T0", velocity: 0 }));
+              currentTick += chordDurationTicks;
+              continue;
+            }
+            const rootNoteName = match[1];
+            const qualityAndExtensions = match[2];
+            try {
+              const rootMidi = getMidiNote(rootNoteName, baseOctave);
+              let formulaIntervals = CHORD_FORMULAS[qualityAndExtensions];
+              if (formulaIntervals === void 0) {
+                if (qualityAndExtensions === "") {
+                  formulaIntervals = CHORD_FORMULAS[""];
+                } else {
+                  console.warn(`Chord quality "${qualityAndExtensions}" not found for "${symbol}". Defaulting to major triad.`);
+                  formulaIntervals = CHORD_FORMULAS[""];
+                }
+              }
+              let chordMidiNotes = formulaIntervals.map((intervalSemitones) => rootMidi + intervalSemitones);
+              if (doInversion && chordMidiNotes.length > 1) {
+                chordMidiNotes.sort((a, b) => a - b);
+                const lowestNote = chordMidiNotes.shift();
+                if (lowestNote !== void 0) {
+                  chordMidiNotes.push(lowestNote + 12);
+                }
+                chordMidiNotes.sort((a, b) => a - b);
+              }
+              let eventMidiNotes = [...chordMidiNotes];
+              if (addBassNote) {
+                const bassNoteMidi = rootMidi - 12;
+                if (bassNoteMidi >= 0 && (!eventMidiNotes.length || bassNoteMidi < Math.min(...eventMidiNotes))) {
+                  eventMidiNotes.unshift(bassNoteMidi);
+                } else if (bassNoteMidi < 0) {
+                  console.warn(`Calculated bass note ${bassNoteMidi} for ${symbol} is below MIDI range 0. Skipping bass note.`);
+                }
+              }
+              eventMidiNotes = eventMidiNotes.filter((note) => note >= 0 && note <= 127);
+              eventMidiNotes = [...new Set(eventMidiNotes)];
+              if (eventMidiNotes.length > 0) {
+                eventMidiNotes.forEach((midiNote) => {
+                  notesForPianoRoll.push({
+                    midiNote,
+                    startTimeTicks: currentTick,
+                    durationTicks: chordDurationTicks,
+                    velocity
+                  });
+                });
+                track.addEvent(new import_midi_writer_js.default.NoteEvent({
+                  pitch: eventMidiNotes,
+                  duration: "T" + chordDurationTicks,
+                  velocity
+                }));
+              } else {
+                console.warn(`No valid MIDI notes generated for chord "${symbol}". Adding rest.`);
+                track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordDurationTicks, duration: "T0", velocity: 0 }));
+              }
+              currentTick += chordDurationTicks;
+            } catch (error) {
+              console.error(`Error processing chord "${symbol}" for MIDI: ${error.message}. Adding rest.`);
+              track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordDurationTicks, duration: "T0", velocity: 0 }));
+              currentTick += chordDurationTicks;
+            }
+          }
+          const writer = new import_midi_writer_js.default.Writer([track]);
+          const midiDataBytes = writer.buildFile();
+          const midiBlob = new Blob([midiDataBytes], { type: "audio/midi" });
+          return { notesForPianoRoll, midiBlob, finalFileName };
+        } catch (error) {
+          console.error("Error generating MIDI data:", error);
+          return null;
+        }
       }
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", setupMidiForm);
