@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chord Progression MIDI Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Optional: Keep custom styles */
+        body { font-family: 'Inter', sans-serif; }
+        input[type=range] { /* Keep range styles */ }
+        input[type=range]::-webkit-slider-thumb { /* Keep range styles */ }
+        input[type=range]::-moz-range-thumb { /* Keep range styles */ }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+
+    <div class="max-w-2xl mx-auto bg-white p-6 md:p-8 rounded-lg shadow-md">
+        <h1 class="text-2xl md:text-3xl font-bold mb-6 text-gray-800 text-center">Chord Progression MIDI Generator</h1>
+
+        <form id="midiForm" class="space-y-5">
+            <div>
+                <label for="progression" class="block text-sm font-medium text-gray-700 mb-1">Chord Progression:</label>
+                <textarea id="progression" name="progression" rows="3" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Dm9 G7 Cmaj7 Fmaj7"></textarea>
+                <p class="text-xs text-gray-500 mt-1">Enter space-separated chord symbols.</p>
+
+                <div class="mt-3 p-3 bg-sky-50 border border-sky-200 rounded-md text-sm text-sky-800">
+                    <span class="font-bold">💡 Quick Workflow:</span>
+                    <p class="mt-1">Ask your favorite AI (like ChatGPT, Gemini or Claude) for a chord progression text (e.g., "<code>Am G C F</code>"). Paste the resulting chords here, choose your options below, and click generate to quickly hear and explore new ideas!</p>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="outputFileName" class="block text-sm font-medium text-gray-700 mb-1">Output Filename (.mid):</label>
+                    <input type="text" id="outputFileName" name="outputFileName" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500" placeholder="progression">
+                </div>
+                 <div>
+                    <label for="tempo" class="block text-sm font-medium text-gray-700 mb-1">Tempo (BPM):</label>
+                    <input type="number" id="tempo" name="tempo" value="120" min="20" max="300" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                    <label for="baseOctave" class="block text-sm font-medium text-gray-700 mb-1">Base Octave:</label>
+                    <select id="baseOctave" name="baseOctave" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white">
+                        <option value="2">2 (Low)</option>
+                        <option value="3" selected>3 (Medium-Low)</option>
+                        <option value="4">4 (Middle C Range)</option>
+                        <option value="5">5 (High)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="chordDuration" class="block text-sm font-medium text-gray-700 mb-1">Chord Duration:</label>
+                    <select id="chordDuration" name="chordDuration" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white">
+                        <option value="16">Sixteenth Note (16)</option>
+                        <option value="8">Eighth Note (8)</option>
+                        <option value="d4">Dotted Quarter (d4)</option>
+                        <option value="4">Quarter Note (4)</option>
+                        <option value="d2">Dotted Half (d2)</option>
+                        <option value="2">Half Note (2)</option>
+                        <option value="1" selected>Whole Note</option>
+                        <option value="T1024">2 Whole Notes</option>
+                        <option value="T1536">3 Whole Notes</option>
+                        <option value="T2048">4 Whole Notes</option> </select>
+                </div>
+            </div>
+            <div>
+                <label for="velocity" class="block text-sm font-medium text-gray-700 mb-1">Velocity (Loudness): <span id="velocityValue" class="font-semibold">90</span></label>
+                <input type="range" id="velocity" name="velocity" min="1" max="127" value="90" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="flex items-center h-5">
+                     <input id="addBassNote" name="addBassNote" type="checkbox" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                </div>
+                <div class="text-sm">
+                    <label for="addBassNote" class="font-medium text-gray-700">Add Bass Note (Root -1 Octave)</label>
+                </div>
+            </div>
+             <div class="flex items-center space-x-4">
+                 <div class="flex items-center h-5">
+                    <input id="doInversion" name="doInversion" type="checkbox" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
+                 </div>
+                 <div class="text-sm">
+                     <label for="doInversion" class="font-medium text-gray-700">Use 1st Inversion</label>
+                 </div>
+            </div>
+            <div>
+                <button type="submit" class="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    Generate & Download MIDI
+                </button>
+            </div>
+        </form>
+
+        <div id="status" class="mt-6 text-center text-sm text-gray-600"></div>
+    </div>
+
+    <script src="dist/bundle.js" defer></script>
+
+</body>
+</html>
