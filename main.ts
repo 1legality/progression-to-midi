@@ -3,9 +3,50 @@ import midiWriterJs from 'midi-writer-js';
 
 // --- Constants and Helper Functions ---
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const INTERVALS = { P1: 0, m2: 1, M2: 2, m3: 3, M3: 4, P4: 5, A4: 6, d5: 6, P5: 7, A5: 8, m6: 8, M6: 9, d7: 9, m7: 10, M7: 11, P8: 12, m9: 13, M9: 14, P11: 17, M13: 21 };
+const INTERVALS = { 
+    P1: 0, 
+    m2: 1, 
+    M2: 2, 
+    m3: 3, 
+    M3: 4, 
+    P4: 5, 
+    A4: 6, 
+    d5: 6, 
+    P5: 7, 
+    A5: 8, 
+    m6: 8, 
+    M6: 9, 
+    d7: 9, 
+    m7: 10, 
+    M7: 11, 
+    P8: 12, 
+    m9: 13, 
+    M9: 14, 
+    P11: 17, 
+    M13: 21 };
 const CHORD_FORMULAS: Record<string, number[]> = {
-    '': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5], 'maj': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5], 'm': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5], 'min': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5], 'dim': [INTERVALS.P1, INTERVALS.m3, INTERVALS.d5], 'aug': [INTERVALS.P1, INTERVALS.M3, INTERVALS.A5], 'sus4': [INTERVALS.P1, INTERVALS.P4, INTERVALS.P5], 'sus2': [INTERVALS.P1, INTERVALS.M2, INTERVALS.P5], '7': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7], 'maj7': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M7], 'm7': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7], 'm(maj7)': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.M7], 'dim7': [INTERVALS.P1, INTERVALS.m3, INTERVALS.d5, INTERVALS.d7], 'm7b5': [INTERVALS.P1, INTERVALS.m3, INTERVALS.d5, INTERVALS.m7], '9': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9], 'maj9': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M7, INTERVALS.M9], 'm9': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9], '11': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.P11], 'm11': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.P11], '13': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.M13], 'maj13': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M7, INTERVALS.M9, INTERVALS.M13], 'm13': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.M13],
+    '': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5], 
+    'maj': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5], 
+    'm': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5], 
+    'min': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5], 
+    'dim': [INTERVALS.P1, INTERVALS.m3, INTERVALS.d5], 
+    'aug': [INTERVALS.P1, INTERVALS.M3, INTERVALS.A5], 
+    'sus4': [INTERVALS.P1, INTERVALS.P4, INTERVALS.P5], 
+    'sus2': [INTERVALS.P1, INTERVALS.M2, INTERVALS.P5], 
+    '7': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7], 
+    'maj7': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M7], 
+    'm7': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7], 
+    'm(maj7)': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.M7], 
+    'dim7': [INTERVALS.P1, INTERVALS.m3, INTERVALS.d5, INTERVALS.d7], 
+    'm7b5': [INTERVALS.P1, INTERVALS.m3, INTERVALS.d5, INTERVALS.m7], 
+    '9': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9], 
+    'maj9': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M7, INTERVALS.M9], 
+    'm9': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9], 
+    '11': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.P11], 
+    'm11': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.P11], 
+    '13': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.M13], 
+    'maj13': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M7, INTERVALS.M9, INTERVALS.M13], 
+    'm13': [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.M13],
 };
 const TPQN = 128; // MIDI Writer JS default ticks per quarter note
 
@@ -115,9 +156,9 @@ function drawPianoRoll(
     maxMidi = Math.min(127, maxMidi + 2); // Add pitch padding
     const midiRange = maxMidi - minMidi + 1;
 
-    // Add 1 tick of padding to maxTimeTicks AFTER calculation to prevent floating point gaps at the edge
+    // Remove 7 ticks from maxTimeTicks to make it more visually appealing
     if (maxTimeTicks > 0) {
-        maxTimeTicks += 1;
+        maxTimeTicks -= 7;
     }
 
     // Calculate scaling factors based on CSS pixel dimensions
@@ -143,24 +184,8 @@ function drawPianoRoll(
         }
     }
 
-    /* // REMOVED: Vertical lines requested to be removed
-    // Vertical lines (time) - Draw lines every whole note
-    const timeGridInterval = TPQN * 4;
-    if (timeScale > 0) { // Only draw if timeScale is valid
-        for (let t = 0; t <= maxTimeTicks; t += timeGridInterval) {
-            const x = t * timeScale;
-            // Draw using canvas buffer coordinates (scaled)
-            ctx.beginPath();
-            ctx.moveTo(x * dpr, 0);
-            ctx.lineTo(x * dpr, canvas.height);
-            ctx.stroke();
-        }
-    }
-    */
-
     // --- Draw Notes ---
     ctx.fillStyle = noteColor;
-    // const inset = 0.5; // REMOVED: Horizontal inset removed
     if (timeScale > 0) { // Only draw notes if timeScale is valid
         notesData.forEach(note => {
             const x = note.startTimeTicks * timeScale;
@@ -170,7 +195,6 @@ function drawPianoRoll(
             const height = noteHeight; // Use full calculated height
 
             // Draw using canvas buffer coordinates (scaled)
-            // REMOVED horizontal inset from x and width calculations
             ctx.fillRect(
                 x * dpr, // No inset on x
                 y * dpr, // No inset on y
