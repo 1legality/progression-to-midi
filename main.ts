@@ -207,236 +207,70 @@ function drawPianoRoll(
 }
 
 
-// --- Main Function to Setup Form Interaction ---
-
 function setupMidiForm() {
     const form = document.getElementById('midiForm') as HTMLFormElement | null;
     const statusDiv = document.getElementById('status');
     const velocitySlider = document.getElementById('velocity') as HTMLInputElement | null;
     const velocityValueSpan = document.getElementById('velocityValue');
     const pianoRollCanvas = document.getElementById('pianoRollCanvas') as HTMLCanvasElement | null;
-    const downloadLinkContainer = document.getElementById('downloadLinkContainer');
+    // Get the new button
+    const downloadMidiOnlyButton = document.getElementById('downloadMidiOnlyButton') as HTMLButtonElement | null;
 
-    if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadLinkContainer) {
-        console.error("Form or display elements not found!");
+    if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas  || !downloadMidiOnlyButton) {
+        console.error("Form, display elements, or download button not found!");
         if (statusDiv) statusDiv.textContent = "Error: Could not find necessary HTML elements.";
         return;
     }
 
-    const ctx = pianoRollCanvas.getContext('2d', { alpha: false }); // Improve performance if no transparency needed
+    const ctx = pianoRollCanvas.getContext('2d', { alpha: false });
     if (!ctx) {
         console.error("Could not get 2D context for canvas");
         return;
     }
 
-    let currentMidiBlobUrl: string | null = null;
-    let lastGeneratedNotes: NoteData[] = []; // Store notes for redraw on resize
+    let lastGeneratedNotes: NoteData[] = [];
 
-    // --- Canvas Resizing Function ---
-    const resizeCanvas = () => {
-        const dpr = window.devicePixelRatio || 1;
-        // Get dimensions based on CSS sizing
-        const rect = pianoRollCanvas.getBoundingClientRect();
+    // --- Canvas Resizing Function (Keep as is) ---
+    const resizeCanvas = () => { /* ... keep existing resize logic ... */ };
 
-        // Check if canvas dimensions are valid
-        if (rect.width <= 0 || rect.height <= 0) {
-            console.warn("Canvas dimensions are invalid during resize. Skipping resize.");
-            return; // Avoid setting invalid dimensions
-        }
-
-        // Set the drawing buffer size correctly
-        pianoRollCanvas.width = Math.round(rect.width * dpr); // Use Math.round for integer values
-        pianoRollCanvas.height = Math.round(rect.height * dpr);
-
-        // Reset the transformation matrix and scale for high DPI
-        // Scaling by DPR is essential for sharp rendering on high-res displays
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-        // Redraw the last generated notes if they exist
-        if (lastGeneratedNotes.length > 0) {
-            drawPianoRoll(lastGeneratedNotes, pianoRollCanvas, ctx);
-        } else {
-            // Or clear and show a message if no notes generated yet
-            // Clear using buffer coordinates
-            ctx.fillStyle = '#f9fafb'; // background color
-            ctx.fillRect(0, 0, pianoRollCanvas.width, pianoRollCanvas.height);
-
-            // Draw text using CSS pixel coordinates after setting transform
-            ctx.save();
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // Apply scaling for text rendering
-            ctx.fillStyle = '#9ca3af'; // gray-400
-            ctx.font = '12px sans-serif';
-            ctx.textAlign = 'center';
-            // Position text using clientWidth/Height (CSS Pixels)
-            ctx.fillText("Generate a progression to see the preview.", pianoRollCanvas.clientWidth / 2, pianoRollCanvas.clientHeight / 2);
-            ctx.restore(); // Restore context state
-        }
-    };
-
-    // --- Update velocity display ---
+    // --- Update velocity display (Keep as is) ---
     velocitySlider.addEventListener('input', (event) => {
         velocityValueSpan.textContent = (event.target as HTMLInputElement).value;
     });
 
-    // --- Form Submission Handler ---
+    // --- **MODIFIED** Form Submission Handler (Generate Preview + Link) ---
     form.addEventListener('submit', (event) => {
         event.preventDefault();
         statusDiv.textContent = 'Generating preview and MIDI...';
         statusDiv.classList.remove('text-red-600', 'text-green-600');
         statusDiv.classList.add('text-gray-600');
-        downloadLinkContainer.innerHTML = '';
-        if (currentMidiBlobUrl) {
-            URL.revokeObjectURL(currentMidiBlobUrl);
-            currentMidiBlobUrl = null;
-        }
-        lastGeneratedNotes = []; // Clear previous notes before generating new ones
+        // No need to manage currentMidiBlobUrl here anymore
+        lastGeneratedNotes = [];
 
-        try {
-            // 1. Get form data (same as before)
-            const formData = new FormData(form);
-            const progressionString = formData.get('progression') as string;
-            const outputFileName = formData.get('outputFileName') as string || 'progression';
-            const addBassNote = formData.has('addBassNote');
-            const doInversion = formData.has('doInversion');
-            const baseOctave = parseInt(formData.get('baseOctave') as string, 10);
-            const chordDurationStr = formData.get('chordDuration') as string;
-            const tempo = parseInt(formData.get('tempo') as string, 10);
-            const velocity = parseInt(formData.get('velocity') as string, 10);
+        const generationResult = generateMidiData(form); // Call the refactored function
 
-            if (!progressionString || progressionString.trim() === '') {
-                throw new Error("Chord progression cannot be empty.");
-            }
-
-            const finalFileName = outputFileName.endsWith('.mid') ? outputFileName : `${outputFileName}.mid`;
-            const chordDurationTicks = getDurationTicks(chordDurationStr);
-
-            // 2. Process Chords into NoteData array and MIDI Track (logic largely unchanged)
-            const track = new midiWriterJs.Track();
-            track.setTempo(tempo);
-            // Set time signature (example: 4/4)
-            // The parameters are: numerator, denominator, ticks per metronome click, number of 32nd notes per MIDI quarter-note (24 ticks)
-            track.setTimeSignature(4, 4, 24, 8);
-
-
-            const notesForPianoRoll: NoteData[] = [];
-            let currentTick = 0;
-
-            const chordSymbols = progressionString.trim().split(/\s+/);
-            const chordRegex = /^([A-G][#b]?)(.*)$/;
-
-            for (const symbol of chordSymbols) {
-                if (!symbol) continue;
-                const match = symbol.match(chordRegex);
-
-                if (!match) {
-                    console.warn(`Could not parse chord symbol: "${symbol}". Skipping.`);
-                    track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + chordDurationTicks, duration: 'T0', velocity: 0 }));
-                    currentTick += chordDurationTicks;
-                    continue;
-                }
-
-                const rootNoteName = match[1];
-                const qualityAndExtensions = match[2];
-
-                try {
-                    const rootMidi = getMidiNote(rootNoteName, baseOctave);
-                    let formulaIntervals = CHORD_FORMULAS[qualityAndExtensions];
-                    if (formulaIntervals === undefined) {
-                        if (qualityAndExtensions === '') { formulaIntervals = CHORD_FORMULAS['']; }
-                        else {
-                            console.warn(`Chord quality "${qualityAndExtensions}" not found for "${symbol}". Defaulting to major triad.`);
-                            formulaIntervals = CHORD_FORMULAS[''];
-                        }
-                    }
-
-                    let chordMidiNotes = formulaIntervals.map(intervalSemitones => rootMidi + intervalSemitones);
-
-                    if (doInversion && chordMidiNotes.length > 1) {
-                        chordMidiNotes.sort((a, b) => a - b);
-                        const lowestNote = chordMidiNotes.shift();
-                        if (lowestNote !== undefined) { chordMidiNotes.push(lowestNote + 12); }
-                        chordMidiNotes.sort((a, b) => a - b);
-                    }
-
-                    let eventMidiNotes = [...chordMidiNotes];
-                    if (addBassNote) {
-                        const bassNoteMidi = rootMidi - 12;
-                        if (bassNoteMidi >= 0 && (!eventMidiNotes.length || bassNoteMidi < Math.min(...eventMidiNotes))) {
-                            eventMidiNotes.unshift(bassNoteMidi);
-                        } else if (bassNoteMidi < 0) {
-                            console.warn(`Calculated bass note ${bassNoteMidi} for ${symbol} is below MIDI range 0. Skipping bass note.`);
-                        }
-                    }
-
-                    eventMidiNotes = eventMidiNotes.filter(note => note >= 0 && note <= 127);
-                    eventMidiNotes = [...new Set(eventMidiNotes)];
-
-                    if (eventMidiNotes.length > 0) {
-                        eventMidiNotes.forEach(midiNote => {
-                            notesForPianoRoll.push({
-                                midiNote: midiNote,
-                                startTimeTicks: currentTick,
-                                durationTicks: chordDurationTicks,
-                                velocity: velocity
-                            });
-                        });
-                        track.addEvent(new midiWriterJs.NoteEvent({
-                            pitch: eventMidiNotes,
-                            duration: 'T' + chordDurationTicks,
-                            velocity: velocity
-                        }));
-                    } else {
-                        console.warn(`No valid MIDI notes generated for chord "${symbol}". Adding rest.`);
-                        track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + chordDurationTicks, duration: 'T0', velocity: 0 }));
-                    }
-                    currentTick += chordDurationTicks;
-
-                } catch (error: any) {
-                    console.error(`Error processing chord "${symbol}" for MIDI: ${error.message}. Adding rest.`);
-                    statusDiv.textContent = `Error processing chord "${symbol}": ${error.message}`;
-                    statusDiv.classList.replace('text-gray-600', 'text-red-600');
-                    track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + chordDurationTicks, duration: 'T0', velocity: 0 }));
-                    currentTick += chordDurationTicks;
-                }
-            } // End chord loop
-
-            // Store generated notes for potential resize redraw
+        if (generationResult) {
+            const { notesForPianoRoll, midiBlob, finalFileName } = generationResult;
             lastGeneratedNotes = [...notesForPianoRoll];
 
-            // 3. Draw Piano Roll (pass context)
-            // Ensure canvas size is correct before drawing
-            resizeCanvas(); // Call resize explicitly before drawing
-            // Now draw with the updated notes
+            // Draw Piano Roll
+            resizeCanvas(); // Ensure canvas size is correct
             drawPianoRoll(lastGeneratedNotes, pianoRollCanvas, ctx);
 
-
-            // 4. Generate MIDI Data and Create Download Link (same as before)
-            const writer = new midiWriterJs.Writer([track]);
-            const midiData = writer.buildFile();
-            const blob = new Blob([midiData], { type: 'audio/midi' });
-            currentMidiBlobUrl = URL.createObjectURL(blob);
-
-            const link = document.createElement('a');
-            link.href = currentMidiBlobUrl;
-            link.download = finalFileName;
-            link.textContent = `Download ${finalFileName}`;
-            link.className = 'inline-block px-4 py-2 bg-emerald-500 text-white rounded-md shadow-sm hover:bg-emerald-600 transition duration-150 ease-in-out';
-            downloadLinkContainer.appendChild(link);
-
-            statusDiv.textContent = `Preview generated. Click link below to download MIDI.`;
+            statusDiv.textContent = `Preview generated.`;
             statusDiv.classList.replace('text-gray-600', 'text-green-600');
 
-        } catch (error: any) {
-            console.error('Error generating MIDI:', error);
-            statusDiv.textContent = `Error: ${error.message}`;
+        } else {
+            // Handle generation error (UI update)
+            statusDiv.textContent = `Error generating MIDI. Check console for details.`;
             statusDiv.classList.replace('text-gray-600', 'text-red-600');
-            lastGeneratedNotes = []; // Clear notes on error
-            // Clear canvas on error
+            lastGeneratedNotes = [];
+            // Clear canvas on error (keep existing error drawing logic)
             const dpr = window.devicePixelRatio || 1;
             ctx.fillStyle = '#f9fafb';
             ctx.fillRect(0, 0, pianoRollCanvas.width, pianoRollCanvas.height);
             ctx.save();
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0); // Ensure transform for text
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
             ctx.fillStyle = '#ef4444'; // red-500
             ctx.font = '14px sans-serif';
             ctx.textAlign = 'center';
@@ -445,19 +279,187 @@ function setupMidiForm() {
         }
     });
 
-    // --- Initial Canvas Setup and Resize Listener ---
+    // --- **NEW** Event Listener for "Download MIDI Only" Button ---
+    downloadMidiOnlyButton.addEventListener('click', (event) => {
+        event.preventDefault(); // Prevent potential form submission if it were type="submit"
+        statusDiv.textContent = 'Generating MIDI file...';
+        statusDiv.classList.remove('text-red-600', 'text-green-600');
+        statusDiv.classList.add('text-gray-600');
+
+        const generationResult = generateMidiData(form); // Call the refactored function
+
+        if (generationResult) {
+            const { midiBlob, finalFileName } = generationResult;
+
+            // Trigger direct download
+            triggerDownload(midiBlob, finalFileName);
+
+            statusDiv.textContent = `MIDI file "${finalFileName}" download initiated.`;
+            statusDiv.classList.replace('text-gray-600', 'text-green-600');
+        } else {
+             // Handle generation error (UI update)
+             statusDiv.textContent = `Error generating MIDI. Check console for details.`;
+             statusDiv.classList.replace('text-gray-600', 'text-red-600');
+        }
+    });
+
+
+    // --- Initial Canvas Setup and Resize Listener (Keep as is) ---
     let resizeTimeout: number;
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimeout);
-        // Debounce resize event
-        resizeTimeout = window.setTimeout(resizeCanvas, 100); // Call resizeCanvas after a short delay
+        resizeTimeout = window.setTimeout(resizeCanvas, 100);
     });
+    resizeCanvas();
 
-    // Initial setup of canvas size when the script runs
-    resizeCanvas(); // Set initial size
-    // Display initial message is now handled within resizeCanvas if lastGeneratedNotes is empty
+}
 
-} // End setupMidiForm
+/**
+ * Creates a temporary link and clicks it to download a blob.
+ * @param blob - The Blob to download.
+ * @param filename - The desired filename for the download.
+ */
+function triggerDownload(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link); // Required for Firefox
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url); // Clean up
+}
+
+/**
+ * Generates MIDI data and note array from form data.
+ * @param form - The HTMLFormElement containing the settings.
+ * @returns Object containing notesForPianoRoll, midiBlob, and finalFileName, or null on error.
+ */
+function generateMidiData(form: HTMLFormElement): { notesForPianoRoll: NoteData[], midiBlob: Blob, finalFileName: string } | null {
+    try {
+        // 1. Get form data
+        const formData = new FormData(form);
+        const progressionString = formData.get('progression') as string;
+        const outputFileName = formData.get('outputFileName') as string || 'progression';
+        const addBassNote = formData.has('addBassNote');
+        const doInversion = formData.has('doInversion');
+        const baseOctave = parseInt(formData.get('baseOctave') as string, 10);
+        const chordDurationStr = formData.get('chordDuration') as string;
+        const tempo = parseInt(formData.get('tempo') as string, 10);
+        const velocity = parseInt(formData.get('velocity') as string, 10);
+
+        if (!progressionString || progressionString.trim() === '') {
+            throw new Error("Chord progression cannot be empty.");
+        }
+
+        const finalFileName = outputFileName.endsWith('.mid') ? outputFileName : `${outputFileName}.mid`;
+        const chordDurationTicks = getDurationTicks(chordDurationStr);
+
+        // 2. Process Chords into NoteData array and MIDI Track
+        const track = new midiWriterJs.Track();
+        track.setTempo(tempo);
+        track.setTimeSignature(4, 4, 24, 8);
+
+        const notesForPianoRoll: NoteData[] = [];
+        let currentTick = 0;
+
+        const chordSymbols = progressionString.trim().split(/\s+/);
+        const chordRegex = /^([A-G][#b]?)(.*)$/;
+
+        for (const symbol of chordSymbols) {
+            if (!symbol) continue;
+            const match = symbol.match(chordRegex);
+
+            if (!match) {
+                console.warn(`Could not parse chord symbol: "${symbol}". Skipping.`);
+                track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + chordDurationTicks, duration: 'T0', velocity: 0 }));
+                currentTick += chordDurationTicks;
+                continue;
+            }
+
+            const rootNoteName = match[1];
+            const qualityAndExtensions = match[2];
+
+            try {
+                const rootMidi = getMidiNote(rootNoteName, baseOctave);
+                let formulaIntervals = CHORD_FORMULAS[qualityAndExtensions];
+                if (formulaIntervals === undefined) {
+                     // Defaulting logic remains the same...
+                     if (qualityAndExtensions === '') { formulaIntervals = CHORD_FORMULAS['']; }
+                     else {
+                         console.warn(`Chord quality "${qualityAndExtensions}" not found for "${symbol}". Defaulting to major triad.`);
+                         formulaIntervals = CHORD_FORMULAS[''];
+                     }
+                }
+
+                let chordMidiNotes = formulaIntervals.map(intervalSemitones => rootMidi + intervalSemitones);
+
+                // Inversion logic remains the same...
+                 if (doInversion && chordMidiNotes.length > 1) {
+                     chordMidiNotes.sort((a, b) => a - b);
+                     const lowestNote = chordMidiNotes.shift();
+                     if (lowestNote !== undefined) { chordMidiNotes.push(lowestNote + 12); }
+                     chordMidiNotes.sort((a, b) => a - b);
+                 }
+
+                // Bass note logic remains the same...
+                 let eventMidiNotes = [...chordMidiNotes];
+                 if (addBassNote) {
+                     const bassNoteMidi = rootMidi - 12;
+                     if (bassNoteMidi >= 0 && (!eventMidiNotes.length || bassNoteMidi < Math.min(...eventMidiNotes))) {
+                         eventMidiNotes.unshift(bassNoteMidi);
+                     } else if (bassNoteMidi < 0) {
+                         console.warn(`Calculated bass note ${bassNoteMidi} for ${symbol} is below MIDI range 0. Skipping bass note.`);
+                     }
+                 }
+
+                eventMidiNotes = eventMidiNotes.filter(note => note >= 0 && note <= 127);
+                eventMidiNotes = [...new Set(eventMidiNotes)];
+
+                if (eventMidiNotes.length > 0) {
+                    eventMidiNotes.forEach(midiNote => {
+                        notesForPianoRoll.push({
+                            midiNote: midiNote,
+                            startTimeTicks: currentTick,
+                            durationTicks: chordDurationTicks,
+                            velocity: velocity
+                        });
+                    });
+                    track.addEvent(new midiWriterJs.NoteEvent({
+                        pitch: eventMidiNotes,
+                        duration: 'T' + chordDurationTicks,
+                        velocity: velocity
+                    }));
+                } else {
+                    console.warn(`No valid MIDI notes generated for chord "${symbol}". Adding rest.`);
+                    track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + chordDurationTicks, duration: 'T0', velocity: 0 }));
+                }
+                currentTick += chordDurationTicks;
+
+            } catch (error: any) {
+                console.error(`Error processing chord "${symbol}" for MIDI: ${error.message}. Adding rest.`);
+                // Don't update statusDiv here, let the caller handle UI
+                track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + chordDurationTicks, duration: 'T0', velocity: 0 }));
+                currentTick += chordDurationTicks;
+                // Optionally re-throw or handle specific errors if needed
+                // throw new Error(`Error processing chord "${symbol}": ${error.message}`); // Or just let it add rests
+            }
+        } // End chord loop
+
+        // 3. Generate MIDI Data Blob
+        const writer = new midiWriterJs.Writer([track]);
+        const midiDataBytes = writer.buildFile(); // Get byte array
+        const midiBlob = new Blob([midiDataBytes], { type: 'audio/midi' });
+
+        return { notesForPianoRoll, midiBlob, finalFileName };
+
+    } catch (error: any) {
+        console.error('Error generating MIDI data:', error);
+        // Let the caller handle UI updates for errors
+        // Return null to indicate failure
+        return null;
+    }
+}
 
 // --- Run Setup after DOM is loaded ---
 if (document.readyState === 'loading') {

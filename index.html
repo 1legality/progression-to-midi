@@ -19,22 +19,24 @@
             <div class="space-y-5">
                 <form id="midiForm" class="space-y-5">
                     <div>
-                        <label for="progression" class="block text-sm font-medium text-gray-700 mb-1">Chord Progression:</label>
-                        <textarea id="progression" name="progression" rows="3"
+                        <label for="progression" class="block text-sm font-medium text-gray-700 mb-1">Chord
+                            Progression:</label>
+                        <input type="text" id="progression" name="progression" rows="3"
                             class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
                             placeholder="e.g., Dm9 G7 Cmaj7 Fmaj7"></textarea>
                         <p class="text-xs text-gray-500 mt-1">Enter space-separated chord symbols.</p>
                         <div class="mt-3 p-3 bg-sky-50 border border-sky-200 rounded-md text-sm text-sky-800">
                             <span class="font-bold">💡 Quick Workflow:</span>
-                            <p class="mt-1">Ask your favorite AI (like ChatGPT, Gemini or Claude) for a chord progression text
-                                (e.g., "<code>Am G C F</code>"). Paste the resulting chords here, choose your options below, and
-                                click generate to quickly hear and explore new ideas!</p>
+                            <p class="mt-1">Ask your favorite AI (like ChatGPT, Gemini or Claude) for a chord
+                                progression text (e.g., "<code>Am G C F</code>"). Paste the resulting chords here, choose your options
+                                below, and click generate to quickly hear and explore new ideas!</p>
                         </div>
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label for="outputFileName" class="block text-sm font-medium text-gray-700 mb-1">Output Filename
+                            <label for="outputFileName" class="block text-sm font-medium text-gray-700 mb-1">Output
+                                Filename
                                 (.mid):</label>
                             <input type="text" id="outputFileName" name="outputFileName"
                                 class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
@@ -46,7 +48,8 @@
                                 class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                         </div>
                         <div>
-                            <label for="baseOctave" class="block text-sm font-medium text-gray-700 mb-1">Base Octave:</label>
+                            <label for="baseOctave" class="block text-sm font-medium text-gray-700 mb-1">Base
+                                Octave:</label>
                             <select id="baseOctave" name="baseOctave"
                                 class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 bg-white">
                                 <option value="2">2 (Low)</option>
@@ -75,8 +78,8 @@
                     </div>
 
                     <div>
-                        <label for="velocity" class="block text-sm font-medium text-gray-700 mb-1">Velocity (Loudness): <span
-                                id="velocityValue" class="font-semibold">90</span></label>
+                        <label for="velocity" class="block text-sm font-medium text-gray-700 mb-1">Velocity (Loudness):
+                            <span id="velocityValue" class="font-semibold">90</span></label>
                         <input type="range" id="velocity" name="velocity" min="1" max="127" value="90"
                             class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
                     </div>
@@ -87,7 +90,8 @@
                                 class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300 rounded">
                         </div>
                         <div class="text-sm">
-                            <label for="addBassNote" class="font-medium text-gray-700">Add Bass Note (Root -1 Octave)</label>
+                            <label for="addBassNote" class="font-medium text-gray-700">Add Bass Note (Root -1
+                                Octave)</label>
                         </div>
                     </div>
                     <div class="flex items-center space-x-4">
@@ -100,18 +104,22 @@
                         </div>
                     </div>
 
-                    <div>
+                    <div class="space-y-3">
                         <button type="submit"
                             class="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                            Generate Preview & MIDI Link
+                            Generate Preview
+                        </button>
+
+                        <button type="button" id="downloadMidiOnlyButton"
+                            class="w-full inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Download MIDI
                         </button>
                     </div>
                 </form>
 
-                <div id="status" class="mt-6 text-center text-sm text-gray-600">Enter a progression and click generate.</div>
+                <div id="status" class="mt-6 text-center text-sm text-gray-600">Enter a progression and click generate.
+                </div>
 
-                <div id="downloadLinkContainer" class="mt-4 text-center">
-                    </div>
             </div>
             <div>
                 <div class="mt-1 md:mt-0">
@@ -120,8 +128,9 @@
                     <p class="text-xs text-gray-500 mt-1 text-center">Visual representation of the generated notes.</p>
                 </div>
             </div>
-             </div>
-        </div> <div class="flex flex-col items-center mt-8 mb-4 space-y-2">
+        </div>
+    </div>
+    <div class="flex flex-col items-center mt-8 mb-4 space-y-2">
         <a href="https://github.com/1legality" target="_blank" rel="noopener noreferrer"
             class="inline-flex items-center px-4 py-2 bg-gray-900 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition duration-150 ease-in-out">
             <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
