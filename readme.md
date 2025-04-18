@@ -4,7 +4,7 @@
     Get the project files onto your local machine. If it's a Git repository:
     ```bash
     git clone <your-repository-url> # Or download ZIP and extract
-    cd <your-project-directory> # e.g., chord-midi-generator
+    cd <your-project-directory> # e.g., progression-to-midi
     ```
     Otherwise, download and extract the files into a directory.
 
