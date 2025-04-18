@@ -1220,7 +1220,7 @@
         maxMidi = Math.min(127, maxMidi + 2);
         const midiRange = maxMidi - minMidi + 1;
         if (maxTimeTicks > 0) {
-          maxTimeTicks -= 7;
+          maxTimeTicks += 1;
         }
         const noteHeight = canvasHeight / midiRange;
         const timeScale = maxTimeTicks > 0 ? canvasWidth / maxTimeTicks : 0;
