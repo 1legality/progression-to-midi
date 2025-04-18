@@ -1,0 +1,17 @@
+/* General body styles */
+body {
+    font-family: 'Inter', sans-serif;
+}
+
+/* Range input styles */
+input[type=range] {
+    /* Keep range styles */
+}
+
+input[type=range]::-webkit-slider-thumb {
+    /* Keep range styles */
+}
+
+input[type=range]::-moz-range-thumb {
+    /* Keep range styles */
+}
