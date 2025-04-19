@@ -109,6 +109,12 @@ export class MidiGenerator {
     private getMidiNote(noteName: string, octave: number): number {
         const noteIndex = this.getNoteIndex(noteName);
         const midiVal = 12 * (octave + 1) + noteIndex;
+        // Ensure note is within reasonable bounds, though final check happens later
+        if (midiVal < 0 || midiVal > 127) {
+             console.warn(`Calculated MIDI note ${midiVal} for ${noteName}${octave} is outside the standard 0-127 range.`);
+             // Return a value that will likely be filtered out later, or clamp/throw error
+             return midiVal; // Keep the value for now, filter later
+        }
         return midiVal;
     }
 
@@ -136,7 +142,7 @@ export class MidiGenerator {
      * @returns An array of voicings (each an array of MIDI notes), starting with root position.
      */
     private generateInversions(rootPositionNotes: number[]): number[][] {
-        if (rootPositionNotes.length <= 1) { 
+        if (rootPositionNotes.length <= 1) {
             return [rootPositionNotes]; // No inversions possible/needed
         }
         const allInversions: number[][] = [];
@@ -151,7 +157,7 @@ export class MidiGenerator {
             // Prepare next inversion (if not the last one)
             if (i < rootPositionNotes.length - 1) {
                 const lowestNote = currentVoicing.shift(); // Remove lowest
-                if (lowestNote !== undefined) { 
+                if (lowestNote !== undefined) {
                     currentVoicing.push(lowestNote + 12); // Add it back an octave higher
                 }
             }
@@ -205,13 +211,10 @@ export class MidiGenerator {
 
             // Calculate difference from target center and determine octave shift needed
             const difference = averagePitch - targetCenterPitch;
-            const octaveShift = Math.round(difference / 12); // Number of octaves to shift
-
-            if (octaveShift !== 0) {
-                // Apply the shift only if it's significant enough (avoids tiny adjustments)
-                // And check if the shift keeps notes within a reasonable range (e.g. 0-127)
-                // We use the threshold defined earlier
-                if (Math.abs(difference) > OCTAVE_ADJUSTMENT_THRESHOLD) {
+            // Only adjust if the average is significantly far from the target
+            if (Math.abs(difference) > OCTAVE_ADJUSTMENT_THRESHOLD) {
+                const octaveShift = Math.round(difference / 12); // Number of octaves to shift
+                if (octaveShift !== 0) {
                     const semitoneShift = octaveShift * -12; // Shift in opposite direction of difference
                     const adjustedVoicing = voicing.map(note => note + semitoneShift);
 
@@ -223,12 +226,12 @@ export class MidiGenerator {
                         return adjustedVoicing.sort((a, b) => a - b);
                     } else {
                         // console.log(`Skipping adjustment for voicing avg ${averagePitch.toFixed(1)} - shift ${semitoneShift} would go out of range.`);
-                        return voicing; // Keep original if shift goes out of bounds
+                        return voicing.sort((a, b) => a - b); // Keep original if shift goes out of bounds, but ensure sorted
                     }
                 }
             }
-            // No significant shift needed, return original voicing
-            return voicing;
+            // No significant shift needed, return original voicing (ensure sorted)
+            return voicing.sort((a, b) => a - b);
         });
     }
 
@@ -247,7 +250,6 @@ export class MidiGenerator {
             chordDurationStr,
             tempo,
             velocity
-            // adjustOctaves // Removed from destructuring
         } = options;
 
         if (!progressionString || progressionString.trim() === '') {
@@ -318,18 +320,20 @@ export class MidiGenerator {
                     let bestVoicing = currentChordVoicing;
                     let minDistance = Infinity;
                     for (const inversion of possibleInversions) {
-                        const distance = this.calculateVoicingDistance(previousChordVoicing, inversion);
+                        // Adjust potential inversion towards target octave *before* calculating distance
+                        const adjustedInversion = this.adjustVoicingsToTargetOctave([inversion], baseOctave)[0];
+                        const distance = this.calculateVoicingDistance(previousChordVoicing, adjustedInversion);
                         if (distance < minDistance) {
                             minDistance = distance;
-                            bestVoicing = inversion;
+                            bestVoicing = adjustedInversion; // Use the adjusted inversion
                         }
                     }
                     currentChordVoicing = bestVoicing;
                 }
 
-                chordData.initialVoicing = [...currentChordVoicing];
+                chordData.initialVoicing = [...currentChordVoicing]; // Store the result of inversion/smoothing
                 chordData.isValid = true;
-                previousChordVoicing = [...currentChordVoicing];
+                previousChordVoicing = [...currentChordVoicing]; // Update previous for next iteration's smoothing
 
             } catch (error: any) {
                 console.error(`Error processing chord "${symbol}": ${error.message}.`);
@@ -341,20 +345,22 @@ export class MidiGenerator {
             currentTick += chordDurationTicks;
         } // End Step 1 loop
 
-        // --- Step 2: Apply Post-Processing Octave Adjustment (Implicitly for 'smooth') ---
+
+        // --- Step 2: Apply Post-Processing Octave Adjustment (if not already done during 'smooth') ---
+        // Note: 'smooth' now adjusts during the smoothing process itself to compare like-with-like octaves.
+        // We still need to adjust 'none' and 'first' inversions here.
         let finalVoicings: number[][];
-        // *** CHANGE HERE: Adjust if inversionType is 'smooth' ***
-        if (inversionType === 'smooth') {
+        if (inversionType === 'none' || inversionType === 'first') {
             const initialVoicings = generatedChords.map(cd => cd.initialVoicing);
             finalVoicings = this.adjustVoicingsToTargetOctave(initialVoicings, baseOctave);
-        } else {
-            // For 'none' or 'first', just use the initial voicings directly
-            finalVoicings = generatedChords.map(cd => cd.initialVoicing);
+        } else { // 'smooth' voicings are already adjusted relative to the previous chord
+            finalVoicings = generatedChords.map(cd => cd.initialVoicing); // Use the already-adjusted initialVoicing
         }
 
-        // Store adjusted voicings back into generatedChords for convenience
+        // Store final voicings back into generatedChords
         generatedChords.forEach((cd, index) => {
-            cd.adjustedVoicing = finalVoicings[index] || []; // Handle potential empty arrays
+            // Ensure the final voicing is sorted, especially after potential adjustments
+            cd.adjustedVoicing = (finalVoicings[index] || []).sort((a, b) => a - b);
         });
 
 
@@ -366,31 +372,77 @@ export class MidiGenerator {
 
         for (const chordData of generatedChords) {
             if (!chordData.isValid || chordData.adjustedVoicing.length === 0) {
+                // Add a rest if the chord is invalid or ended up with no notes
                 track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + chordData.durationTicks, duration: 'T0', velocity: 0 }));
                 continue;
             }
 
-            let eventMidiNotes = [...chordData.adjustedVoicing];
+            let eventMidiNotes = [...chordData.adjustedVoicing]; // Start with the adjusted chord notes
 
-            // Add bass note if requested
+            // --- Add Bass Note Logic ---
             if (addBassNote) {
-                const bassNoteMidi = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
-                if (bassNoteMidi >= 0 && bassNoteMidi <= 127) {
-                    if (!eventMidiNotes.length || bassNoteMidi < Math.min(...eventMidiNotes)) {
-                        eventMidiNotes.unshift(bassNoteMidi);
+                const minNoteInVoicing = Math.min(...eventMidiNotes); // Lowest note in the current chord voicing
+                let chosenBassNoteMidi: number | null = null;
+
+                if (inversionType === 'smooth') {
+                    // --- Smart Bass Note Placement for Smooth Voicing ---
+                    const potentialBassNotes: { note: number; distance: number }[] = [];
+                    // Check octaves below the current voicing's lowest note
+                    for (let octave = baseOctave; octave >= 0; octave--) { // Iterate downwards from baseOctave
+                        const potentialBass = this.getMidiNote(chordData.rootNoteName, octave);
+                        if (potentialBass < minNoteInVoicing && potentialBass >= 0) {
+                            potentialBassNotes.push({ note: potentialBass, distance: minNoteInVoicing - potentialBass });
+                            // Optimization: If we found one significantly lower, maybe stop searching further down?
+                            // For now, collect all valid lower ones.
+                        } else if (potentialBass < 0) {
+                            break; // Stop if we go below MIDI range 0
+                        }
+                    }
+
+                    if (potentialBassNotes.length > 0) {
+                        // Find the potential bass note with the smallest distance (closest below)
+                        potentialBassNotes.sort((a, b) => a.distance - b.distance);
+                        chosenBassNoteMidi = potentialBassNotes[0].note;
+                    } else {
+                        // Fallback if no lower bass note found (e.g., chord is very low)
+                        // Use the original logic (octave below base) as a last resort, but check range and if it's lower
+                        const fallbackBass = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
+                        if (fallbackBass >= 0 && fallbackBass <= 127 && fallbackBass < minNoteInVoicing) {
+                             chosenBassNoteMidi = fallbackBass;
+                             console.warn(`Could not find ideal bass note octave for ${chordData.symbol} below voicing. Using default octave ${baseOctave - 1}.`);
+                        } else {
+                            console.warn(`Could not find any suitable bass note octave for ${chordData.symbol} below the chord voicing ${chordData.adjustedVoicing}. Skipping bass note.`);
+                        }
                     }
                 } else {
-                    console.warn(`Calculated bass note ${bassNoteMidi} for ${chordData.symbol} is out of MIDI range 0-127. Skipping bass note.`);
+                    // --- Standard Bass Note Placement (None or First Inversion) ---
+                    const standardBassNote = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
+                    if (standardBassNote >= 0 && standardBassNote <= 127) {
+                        // Optional check: Warn if bass note isn't strictly lower than the chord
+                        if (standardBassNote >= minNoteInVoicing) {
+                             console.warn(`Bass note ${standardBassNote} for ${chordData.symbol} in octave ${baseOctave - 1} is not lower than the chord voicing ${eventMidiNotes}.`);
+                        }
+                        chosenBassNoteMidi = standardBassNote;
+                    } else {
+                        console.warn(`Calculated bass note ${standardBassNote} for ${chordData.symbol} is out of MIDI range 0-127. Skipping bass note.`);
+                    }
                 }
-            }
 
-            // Final filtering: ensure all notes are within MIDI range 0-127 and remove duplicates
+                // Add the chosen bass note if valid and not already present
+                if (chosenBassNoteMidi !== null && !eventMidiNotes.includes(chosenBassNoteMidi)) {
+                    eventMidiNotes.push(chosenBassNoteMidi); // Add the bass note
+                }
+            } // --- End Add Bass Note Logic ---
+
+
+            // Final filtering and sorting: ensure all notes are within MIDI range 0-127 and remove duplicates
             eventMidiNotes = eventMidiNotes
                 .filter(note => note >= 0 && note <= 127)
                 .sort((a, b) => a - b);
-            eventMidiNotes = [...new Set(eventMidiNotes)];
+            eventMidiNotes = [...new Set(eventMidiNotes)]; // Remove duplicates after sorting
 
             if (eventMidiNotes.length > 0) {
+                // Add notes to piano roll data
                 eventMidiNotes.forEach(midiNote => {
                     notesForPianoRoll.push({
                         midiNote: midiNote,
@@ -399,12 +451,14 @@ export class MidiGenerator {
                         velocity: velocity
                     });
                 });
+                // Add MIDI event
                 track.addEvent(new midiWriterJs.NoteEvent({
                     pitch: eventMidiNotes,
                     duration: 'T' + chordData.durationTicks,
                     velocity: velocity
                 }));
             } else {
+                // Add a rest if filtering removed all notes
                 console.warn(`No valid MIDI notes remained for chord "${chordData.symbol}" after final filtering. Adding rest.`);
                 track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + chordData.durationTicks, duration: 'T0', velocity: 0 }));
             }

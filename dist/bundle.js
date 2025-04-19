@@ -1160,6 +1160,10 @@
         getMidiNote(noteName, octave) {
           const noteIndex = this.getNoteIndex(noteName);
           const midiVal = 12 * (octave + 1) + noteIndex;
+          if (midiVal < 0 || midiVal > 127) {
+            console.warn(`Calculated MIDI note ${midiVal} for ${noteName}${octave} is outside the standard 0-127 range.`);
+            return midiVal;
+          }
           return midiVal;
         }
         getDurationTicks(durationCode) {
@@ -1252,9 +1256,9 @@
             const sum = voicing.reduce((acc, note) => acc + note, 0);
             const averagePitch = sum / voicing.length;
             const difference = averagePitch - targetCenterPitch;
-            const octaveShift = Math.round(difference / 12);
-            if (octaveShift !== 0) {
-              if (Math.abs(difference) > OCTAVE_ADJUSTMENT_THRESHOLD) {
+            if (Math.abs(difference) > OCTAVE_ADJUSTMENT_THRESHOLD) {
+              const octaveShift = Math.round(difference / 12);
+              if (octaveShift !== 0) {
                 const semitoneShift = octaveShift * -12;
                 const adjustedVoicing = voicing.map((note) => note + semitoneShift);
                 const minNote = Math.min(...adjustedVoicing);
@@ -1262,11 +1266,11 @@
                 if (minNote >= 0 && maxNote <= 127) {
                   return adjustedVoicing.sort((a, b) => a - b);
                 } else {
-                  return voicing;
+                  return voicing.sort((a, b) => a - b);
                 }
               }
             }
-            return voicing;
+            return voicing.sort((a, b) => a - b);
           });
         }
         /**
@@ -1284,7 +1288,6 @@
             chordDurationStr,
             tempo,
             velocity
-            // adjustOctaves // Removed from destructuring
           } = options;
           if (!progressionString || progressionString.trim() === "") {
             throw new Error("Chord progression cannot be empty.");
@@ -1343,10 +1346,11 @@
                 let bestVoicing = currentChordVoicing;
                 let minDistance = Infinity;
                 for (const inversion of possibleInversions) {
-                  const distance = this.calculateVoicingDistance(previousChordVoicing, inversion);
+                  const adjustedInversion = this.adjustVoicingsToTargetOctave([inversion], baseOctave)[0];
+                  const distance = this.calculateVoicingDistance(previousChordVoicing, adjustedInversion);
                   if (distance < minDistance) {
                     minDistance = distance;
-                    bestVoicing = inversion;
+                    bestVoicing = adjustedInversion;
                   }
                 }
                 currentChordVoicing = bestVoicing;
@@ -1362,14 +1366,14 @@
             currentTick += chordDurationTicks;
           }
           let finalVoicings;
-          if (inversionType === "smooth") {
+          if (inversionType === "none" || inversionType === "first") {
             const initialVoicings = generatedChords.map((cd) => cd.initialVoicing);
             finalVoicings = this.adjustVoicingsToTargetOctave(initialVoicings, baseOctave);
           } else {
             finalVoicings = generatedChords.map((cd) => cd.initialVoicing);
           }
           generatedChords.forEach((cd, index) => {
-            cd.adjustedVoicing = finalVoicings[index] || [];
+            cd.adjustedVoicing = (finalVoicings[index] || []).sort((a, b) => a - b);
           });
           const track = new import_midi_writer_js.default.Track();
           track.setTempo(tempo);
@@ -1382,13 +1386,43 @@
             }
             let eventMidiNotes = [...chordData.adjustedVoicing];
             if (addBassNote) {
-              const bassNoteMidi = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
-              if (bassNoteMidi >= 0 && bassNoteMidi <= 127) {
-                if (!eventMidiNotes.length || bassNoteMidi < Math.min(...eventMidiNotes)) {
-                  eventMidiNotes.unshift(bassNoteMidi);
+              const minNoteInVoicing = Math.min(...eventMidiNotes);
+              let chosenBassNoteMidi = null;
+              if (inversionType === "smooth") {
+                const potentialBassNotes = [];
+                for (let octave = baseOctave; octave >= 0; octave--) {
+                  const potentialBass = this.getMidiNote(chordData.rootNoteName, octave);
+                  if (potentialBass < minNoteInVoicing && potentialBass >= 0) {
+                    potentialBassNotes.push({ note: potentialBass, distance: minNoteInVoicing - potentialBass });
+                  } else if (potentialBass < 0) {
+                    break;
+                  }
+                }
+                if (potentialBassNotes.length > 0) {
+                  potentialBassNotes.sort((a, b) => a.distance - b.distance);
+                  chosenBassNoteMidi = potentialBassNotes[0].note;
+                } else {
+                  const fallbackBass = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
+                  if (fallbackBass >= 0 && fallbackBass <= 127 && fallbackBass < minNoteInVoicing) {
+                    chosenBassNoteMidi = fallbackBass;
+                    console.warn(`Could not find ideal bass note octave for ${chordData.symbol} below voicing. Using default octave ${baseOctave - 1}.`);
+                  } else {
+                    console.warn(`Could not find any suitable bass note octave for ${chordData.symbol} below the chord voicing ${chordData.adjustedVoicing}. Skipping bass note.`);
+                  }
                 }
               } else {
-                console.warn(`Calculated bass note ${bassNoteMidi} for ${chordData.symbol} is out of MIDI range 0-127. Skipping bass note.`);
+                const standardBassNote = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
+                if (standardBassNote >= 0 && standardBassNote <= 127) {
+                  if (standardBassNote >= minNoteInVoicing) {
+                    console.warn(`Bass note ${standardBassNote} for ${chordData.symbol} in octave ${baseOctave - 1} is not lower than the chord voicing ${eventMidiNotes}.`);
+                  }
+                  chosenBassNoteMidi = standardBassNote;
+                } else {
+                  console.warn(`Calculated bass note ${standardBassNote} for ${chordData.symbol} is out of MIDI range 0-127. Skipping bass note.`);
+                }
+              }
+              if (chosenBassNoteMidi !== null && !eventMidiNotes.includes(chosenBassNoteMidi)) {
+                eventMidiNotes.push(chosenBassNoteMidi);
               }
             }
             eventMidiNotes = eventMidiNotes.filter((note) => note >= 0 && note <= 127).sort((a, b) => a - b);
