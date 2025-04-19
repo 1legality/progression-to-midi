@@ -1341,19 +1341,23 @@
                   currentChordVoicing.push(lowestNote + 12);
                 }
                 currentChordVoicing.sort((a, b) => a - b);
-              } else if (inversionType === "smooth" && previousChordVoicing && currentChordVoicing.length > 1) {
-                const possibleInversions = this.generateInversions(rootPositionNotes);
-                let bestVoicing = currentChordVoicing;
-                let minDistance = Infinity;
-                for (const inversion of possibleInversions) {
-                  const adjustedInversion = this.adjustVoicingsToTargetOctave([inversion], baseOctave)[0];
-                  const distance = this.calculateVoicingDistance(previousChordVoicing, adjustedInversion);
-                  if (distance < minDistance) {
-                    minDistance = distance;
-                    bestVoicing = adjustedInversion;
+              } else if (inversionType === "smooth") {
+                if (!previousChordVoicing && currentChordVoicing.length > 1) {
+                  currentChordVoicing = this.adjustVoicingsToTargetOctave([currentChordVoicing], baseOctave)[0];
+                } else if (previousChordVoicing && currentChordVoicing.length > 1) {
+                  const possibleInversions = this.generateInversions(rootPositionNotes);
+                  let bestVoicing = currentChordVoicing;
+                  let minDistance = Infinity;
+                  for (const inversion of possibleInversions) {
+                    const adjustedInversion = this.adjustVoicingsToTargetOctave([inversion], baseOctave)[0];
+                    const distance = this.calculateVoicingDistance(previousChordVoicing, adjustedInversion);
+                    if (distance < minDistance) {
+                      minDistance = distance;
+                      bestVoicing = adjustedInversion;
+                    }
                   }
+                  currentChordVoicing = bestVoicing;
                 }
-                currentChordVoicing = bestVoicing;
               }
               chordData.initialVoicing = [...currentChordVoicing];
               chordData.isValid = true;
@@ -1405,20 +1409,12 @@
                   const fallbackBass = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
                   if (fallbackBass >= 0 && fallbackBass <= 127 && fallbackBass < minNoteInVoicing) {
                     chosenBassNoteMidi = fallbackBass;
-                    console.warn(`Could not find ideal bass note octave for ${chordData.symbol} below voicing. Using default octave ${baseOctave - 1}.`);
-                  } else {
-                    console.warn(`Could not find any suitable bass note octave for ${chordData.symbol} below the chord voicing ${chordData.adjustedVoicing}. Skipping bass note.`);
                   }
                 }
               } else {
                 const standardBassNote = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
                 if (standardBassNote >= 0 && standardBassNote <= 127) {
-                  if (standardBassNote >= minNoteInVoicing) {
-                    console.warn(`Bass note ${standardBassNote} for ${chordData.symbol} in octave ${baseOctave - 1} is not lower than the chord voicing ${eventMidiNotes}.`);
-                  }
                   chosenBassNoteMidi = standardBassNote;
-                } else {
-                  console.warn(`Calculated bass note ${standardBassNote} for ${chordData.symbol} is out of MIDI range 0-127. Skipping bass note.`);
                 }
               }
               if (chosenBassNoteMidi !== null && !eventMidiNotes.includes(chosenBassNoteMidi)) {
