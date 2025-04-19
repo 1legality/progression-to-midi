@@ -1072,7 +1072,7 @@
   });
 
   // MidiGenerator.ts
-  var import_midi_writer_js, NOTES, INTERVALS, CHORD_FORMULAS, TPQN, MidiGenerator;
+  var import_midi_writer_js, NOTES, INTERVALS, CHORD_FORMULAS, TPQN, OCTAVE_ADJUSTMENT_THRESHOLD, MidiGenerator;
   var init_MidiGenerator = __esm({
     "MidiGenerator.ts"() {
       "use strict";
@@ -1125,6 +1125,7 @@
         "m13": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.M13]
       };
       TPQN = 128;
+      OCTAVE_ADJUSTMENT_THRESHOLD = 6;
       MidiGenerator = class {
         // --- Helper Functions (can be private methods) ---
         normalizeNoteName(note) {
@@ -1159,10 +1160,7 @@
         getMidiNote(noteName, octave) {
           const noteIndex = this.getNoteIndex(noteName);
           const midiVal = 12 * (octave + 1) + noteIndex;
-          if (midiVal < 0 || midiVal > 127) {
-            console.warn(`Calculated MIDI note ${midiVal} for ${noteName}${octave} is out of range (0-127). Clamping may occur.`);
-          }
-          return Math.max(0, Math.min(127, midiVal));
+          return midiVal;
         }
         getDurationTicks(durationCode) {
           switch (durationCode) {
@@ -1237,6 +1235,41 @@
           return totalDistance;
         }
         /**
+         * Adjusts chord voicings to be closer to the target octave.
+         * @param voicings - Array of chord voicings (arrays of MIDI notes).
+         * @param baseOctave - The desired base octave (e.g., 3, 4).
+         * @returns A new array with adjusted voicings.
+         */
+        adjustVoicingsToTargetOctave(voicings, baseOctave) {
+          if (!voicings || voicings.length === 0) {
+            return [];
+          }
+          const targetCenterPitch = this.getMidiNote("C", baseOctave);
+          return voicings.map((voicing) => {
+            if (!voicing || voicing.length === 0) {
+              return [];
+            }
+            const sum = voicing.reduce((acc, note) => acc + note, 0);
+            const averagePitch = sum / voicing.length;
+            const difference = averagePitch - targetCenterPitch;
+            const octaveShift = Math.round(difference / 12);
+            if (octaveShift !== 0) {
+              if (Math.abs(difference) > OCTAVE_ADJUSTMENT_THRESHOLD) {
+                const semitoneShift = octaveShift * -12;
+                const adjustedVoicing = voicing.map((note) => note + semitoneShift);
+                const minNote = Math.min(...adjustedVoicing);
+                const maxNote = Math.max(...adjustedVoicing);
+                if (minNote >= 0 && maxNote <= 127) {
+                  return adjustedVoicing.sort((a, b) => a - b);
+                } else {
+                  return voicing;
+                }
+              }
+            }
+            return voicing;
+          });
+        }
+        /**
          * Generates MIDI data and note array from provided options.
          * @param options - The settings for MIDI generation.
          * @returns Object containing notesForPianoRoll, midiBlob, and finalFileName, or throws an error.
@@ -1245,39 +1278,46 @@
           const {
             progressionString,
             outputFileName = "progression",
-            // Default filename
             addBassNote,
             inversionType,
             baseOctave,
             chordDurationStr,
             tempo,
             velocity
+            // adjustOctaves // Removed from destructuring
           } = options;
           if (!progressionString || progressionString.trim() === "") {
             throw new Error("Chord progression cannot be empty.");
           }
           const finalFileName = outputFileName.endsWith(".mid") ? outputFileName : `${outputFileName}.mid`;
           const chordDurationTicks = this.getDurationTicks(chordDurationStr);
-          const track = new import_midi_writer_js.default.Track();
-          track.setTempo(tempo);
-          track.setTimeSignature(4, 4, 24, 8);
-          const notesForPianoRoll = [];
-          let currentTick = 0;
-          let previousChordVoicing = null;
           const chordSymbols = progressionString.trim().split(/\s+/);
           const chordRegex = /^([A-G][#b]?)(.*)$/;
+          const generatedChords = [];
+          let currentTick = 0;
+          let previousChordVoicing = null;
           for (const symbol of chordSymbols) {
             if (!symbol) continue;
             const match = symbol.match(chordRegex);
+            let chordData = {
+              symbol,
+              startTimeTicks: currentTick,
+              durationTicks: chordDurationTicks,
+              initialVoicing: [],
+              adjustedVoicing: [],
+              rootNoteName: "",
+              isValid: false
+            };
             if (!match) {
-              console.warn(`Could not parse chord symbol: "${symbol}". Skipping (adding rest).`);
-              track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordDurationTicks, duration: "T0", velocity: 0 }));
+              console.warn(`Could not parse chord symbol: "${symbol}". Skipping.`);
+              generatedChords.push(chordData);
               currentTick += chordDurationTicks;
               previousChordVoicing = null;
               continue;
             }
             const rootNoteName = match[1];
             let qualityAndExtensions = match[2];
+            chordData.rootNoteName = rootNoteName;
             try {
               const rootMidi = this.getMidiNote(rootNoteName, baseOctave);
               let formulaIntervals = CHORD_FORMULAS[qualityAndExtensions];
@@ -1311,45 +1351,65 @@
                 }
                 currentChordVoicing = bestVoicing;
               }
-              let eventMidiNotes = [...currentChordVoicing];
-              if (addBassNote) {
-                const bassNoteMidi = this.getMidiNote(rootNoteName, baseOctave - 1);
-                if (bassNoteMidi >= 0) {
-                  if (!eventMidiNotes.length || bassNoteMidi < Math.min(...eventMidiNotes)) {
-                    eventMidiNotes.unshift(bassNoteMidi);
-                  }
-                } else {
-                  console.warn(`Calculated bass note ${bassNoteMidi} for ${symbol} is below MIDI range 0. Skipping bass note.`);
-                }
-              }
-              eventMidiNotes = eventMidiNotes.filter((note) => note >= 0 && note <= 127);
-              eventMidiNotes = [...new Set(eventMidiNotes)].sort((a, b) => a - b);
-              if (eventMidiNotes.length > 0) {
-                eventMidiNotes.forEach((midiNote) => {
-                  notesForPianoRoll.push({
-                    midiNote,
-                    startTimeTicks: currentTick,
-                    durationTicks: chordDurationTicks,
-                    velocity
-                  });
-                });
-                track.addEvent(new import_midi_writer_js.default.NoteEvent({
-                  pitch: eventMidiNotes,
-                  duration: "T" + chordDurationTicks,
-                  velocity
-                }));
-                previousChordVoicing = [...currentChordVoicing];
-              } else {
-                console.warn(`No valid MIDI notes generated for chord "${symbol}". Adding rest.`);
-                track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordDurationTicks, duration: "T0", velocity: 0 }));
-                previousChordVoicing = null;
-              }
-              currentTick += chordDurationTicks;
+              chordData.initialVoicing = [...currentChordVoicing];
+              chordData.isValid = true;
+              previousChordVoicing = [...currentChordVoicing];
             } catch (error) {
-              console.error(`Error processing chord "${symbol}": ${error.message}. Adding rest.`);
-              track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordDurationTicks, duration: "T0", velocity: 0 }));
-              currentTick += chordDurationTicks;
+              console.error(`Error processing chord "${symbol}": ${error.message}.`);
               previousChordVoicing = null;
+            }
+            generatedChords.push(chordData);
+            currentTick += chordDurationTicks;
+          }
+          let finalVoicings;
+          if (inversionType === "smooth") {
+            const initialVoicings = generatedChords.map((cd) => cd.initialVoicing);
+            finalVoicings = this.adjustVoicingsToTargetOctave(initialVoicings, baseOctave);
+          } else {
+            finalVoicings = generatedChords.map((cd) => cd.initialVoicing);
+          }
+          generatedChords.forEach((cd, index) => {
+            cd.adjustedVoicing = finalVoicings[index] || [];
+          });
+          const track = new import_midi_writer_js.default.Track();
+          track.setTempo(tempo);
+          track.setTimeSignature(4, 4, 24, 8);
+          const notesForPianoRoll = [];
+          for (const chordData of generatedChords) {
+            if (!chordData.isValid || chordData.adjustedVoicing.length === 0) {
+              track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordData.durationTicks, duration: "T0", velocity: 0 }));
+              continue;
+            }
+            let eventMidiNotes = [...chordData.adjustedVoicing];
+            if (addBassNote) {
+              const bassNoteMidi = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
+              if (bassNoteMidi >= 0 && bassNoteMidi <= 127) {
+                if (!eventMidiNotes.length || bassNoteMidi < Math.min(...eventMidiNotes)) {
+                  eventMidiNotes.unshift(bassNoteMidi);
+                }
+              } else {
+                console.warn(`Calculated bass note ${bassNoteMidi} for ${chordData.symbol} is out of MIDI range 0-127. Skipping bass note.`);
+              }
+            }
+            eventMidiNotes = eventMidiNotes.filter((note) => note >= 0 && note <= 127).sort((a, b) => a - b);
+            eventMidiNotes = [...new Set(eventMidiNotes)];
+            if (eventMidiNotes.length > 0) {
+              eventMidiNotes.forEach((midiNote) => {
+                notesForPianoRoll.push({
+                  midiNote,
+                  startTimeTicks: chordData.startTimeTicks,
+                  durationTicks: chordData.durationTicks,
+                  velocity
+                });
+              });
+              track.addEvent(new import_midi_writer_js.default.NoteEvent({
+                pitch: eventMidiNotes,
+                duration: "T" + chordData.durationTicks,
+                velocity
+              }));
+            } else {
+              console.warn(`No valid MIDI notes remained for chord "${chordData.symbol}" after final filtering. Adding rest.`);
+              track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordData.durationTicks, duration: "T0", velocity: 0 }));
             }
           }
           const writer = new import_midi_writer_js.default.Writer([track]);
