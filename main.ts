@@ -73,12 +73,18 @@ function setupApp() {
                 progressionString: formData.get('progression') as string,
                 outputFileName: formData.get('outputFileName') as string || undefined, // Let generator handle default
                 addBassNote: formData.has('addBassNote'),
-                doInversion: formData.has('doInversion'),
+                inversionType: formData.get('inversionType') as 'none' | 'first' | 'smooth',
                 baseOctave: parseInt(formData.get('baseOctave') as string, 10),
                 chordDurationStr: formData.get('chordDuration') as string,
                 tempo: parseInt(formData.get('tempo') as string, 10),
                 velocity: parseInt(formData.get('velocity') as string, 10)
             };
+
+            // Basic validation for inversionType in case something goes wrong with form data
+            if (!['none', 'first', 'smooth'].includes(options.inversionType)) {
+                console.warn(`Invalid inversionType received: ${options.inversionType}. Defaulting to 'none'.`);
+                options.inversionType = 'none';
+            }
 
             // 2. Generate MIDI and Notes
             const generationResult = midiGenerator.generate(options);

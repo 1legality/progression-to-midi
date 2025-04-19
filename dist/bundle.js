@@ -1192,6 +1192,51 @@
           }
         }
         /**
+         * Generates all possible inversions for a given set of root-position chord notes.
+         * @param rootPositionNotes - Array of MIDI notes in root position, sorted low to high.
+         * @returns An array of voicings (each an array of MIDI notes), starting with root position.
+         */
+        generateInversions(rootPositionNotes) {
+          if (rootPositionNotes.length <= 1) {
+            return [rootPositionNotes];
+          }
+          const allInversions = [];
+          let currentVoicing = [...rootPositionNotes];
+          for (let i = 0; i < rootPositionNotes.length; i++) {
+            currentVoicing.sort((a, b) => a - b);
+            allInversions.push([...currentVoicing]);
+            if (i < rootPositionNotes.length - 1) {
+              const lowestNote = currentVoicing.shift();
+              if (lowestNote !== void 0) {
+                currentVoicing.push(lowestNote + 12);
+              }
+            }
+          }
+          return allInversions;
+        }
+        /**
+         * Calculates a distance metric between two chord voicings to estimate smoothness.
+         * A lower score means a smoother transition.
+         * This simple version sums the absolute MIDI pitch differences of corresponding notes.
+         * It penalizes differences in the number of notes.
+         * @param voicing1 - First voicing (array of MIDI notes, sorted).
+         * @param voicing2 - Second voicing (array of MIDI notes, sorted).
+         * @returns A numeric score representing the distance.
+         */
+        calculateVoicingDistance(voicing1, voicing2) {
+          const sorted1 = [...voicing1].sort((a, b) => a - b);
+          const sorted2 = [...voicing2].sort((a, b) => a - b);
+          let totalDistance = 0;
+          const minLength = Math.min(sorted1.length, sorted2.length);
+          const maxLength = Math.max(sorted1.length, sorted2.length);
+          for (let i = 0; i < minLength; i++) {
+            totalDistance += Math.abs(sorted1[i] - sorted2[i]);
+          }
+          const noteCountDifference = maxLength - minLength;
+          totalDistance += noteCountDifference * 6;
+          return totalDistance;
+        }
+        /**
          * Generates MIDI data and note array from provided options.
          * @param options - The settings for MIDI generation.
          * @returns Object containing notesForPianoRoll, midiBlob, and finalFileName, or throws an error.
@@ -1202,7 +1247,7 @@
             outputFileName = "progression",
             // Default filename
             addBassNote,
-            doInversion,
+            inversionType,
             baseOctave,
             chordDurationStr,
             tempo,
@@ -1218,6 +1263,7 @@
           track.setTimeSignature(4, 4, 24, 8);
           const notesForPianoRoll = [];
           let currentTick = 0;
+          let previousChordVoicing = null;
           const chordSymbols = progressionString.trim().split(/\s+/);
           const chordRegex = /^([A-G][#b]?)(.*)$/;
           for (const symbol of chordSymbols) {
@@ -1227,6 +1273,7 @@
               console.warn(`Could not parse chord symbol: "${symbol}". Skipping (adding rest).`);
               track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordDurationTicks, duration: "T0", velocity: 0 }));
               currentTick += chordDurationTicks;
+              previousChordVoicing = null;
               continue;
             }
             const rootNoteName = match[1];
@@ -1243,18 +1290,30 @@
                   formulaIntervals = CHORD_FORMULAS["maj"];
                 }
               }
-              let chordMidiNotes = formulaIntervals.map((intervalSemitones) => rootMidi + intervalSemitones);
-              if (doInversion && chordMidiNotes.length > 1) {
-                chordMidiNotes.sort((a, b) => a - b);
-                const lowestNote = chordMidiNotes.shift();
+              let rootPositionNotes = formulaIntervals.map((intervalSemitones) => rootMidi + intervalSemitones).sort((a, b) => a - b);
+              let currentChordVoicing = [...rootPositionNotes];
+              if (inversionType === "first" && currentChordVoicing.length > 1) {
+                const lowestNote = currentChordVoicing.shift();
                 if (lowestNote !== void 0) {
-                  chordMidiNotes.push(lowestNote + 12);
+                  currentChordVoicing.push(lowestNote + 12);
                 }
-                chordMidiNotes.sort((a, b) => a - b);
+                currentChordVoicing.sort((a, b) => a - b);
+              } else if (inversionType === "smooth" && previousChordVoicing && currentChordVoicing.length > 1) {
+                const possibleInversions = this.generateInversions(rootPositionNotes);
+                let bestVoicing = currentChordVoicing;
+                let minDistance = Infinity;
+                for (const inversion of possibleInversions) {
+                  const distance = this.calculateVoicingDistance(previousChordVoicing, inversion);
+                  if (distance < minDistance) {
+                    minDistance = distance;
+                    bestVoicing = inversion;
+                  }
+                }
+                currentChordVoicing = bestVoicing;
               }
-              let eventMidiNotes = [...chordMidiNotes];
+              let eventMidiNotes = [...currentChordVoicing];
               if (addBassNote) {
-                const bassNoteMidi = rootMidi - 12;
+                const bassNoteMidi = this.getMidiNote(rootNoteName, baseOctave - 1);
                 if (bassNoteMidi >= 0) {
                   if (!eventMidiNotes.length || bassNoteMidi < Math.min(...eventMidiNotes)) {
                     eventMidiNotes.unshift(bassNoteMidi);
@@ -1264,7 +1323,7 @@
                 }
               }
               eventMidiNotes = eventMidiNotes.filter((note) => note >= 0 && note <= 127);
-              eventMidiNotes = [...new Set(eventMidiNotes)];
+              eventMidiNotes = [...new Set(eventMidiNotes)].sort((a, b) => a - b);
               if (eventMidiNotes.length > 0) {
                 eventMidiNotes.forEach((midiNote) => {
                   notesForPianoRoll.push({
@@ -1278,17 +1337,19 @@
                   pitch: eventMidiNotes,
                   duration: "T" + chordDurationTicks,
                   velocity
-                  // 'wait' is implicit based on previous event duration
                 }));
+                previousChordVoicing = [...currentChordVoicing];
               } else {
                 console.warn(`No valid MIDI notes generated for chord "${symbol}". Adding rest.`);
                 track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordDurationTicks, duration: "T0", velocity: 0 }));
+                previousChordVoicing = null;
               }
               currentTick += chordDurationTicks;
             } catch (error) {
               console.error(`Error processing chord "${symbol}": ${error.message}. Adding rest.`);
               track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordDurationTicks, duration: "T0", velocity: 0 }));
               currentTick += chordDurationTicks;
+              previousChordVoicing = null;
             }
           }
           const writer = new import_midi_writer_js.default.Writer([track]);
@@ -1484,12 +1545,16 @@
               outputFileName: formData.get("outputFileName") || void 0,
               // Let generator handle default
               addBassNote: formData.has("addBassNote"),
-              doInversion: formData.has("doInversion"),
+              inversionType: formData.get("inversionType"),
               baseOctave: parseInt(formData.get("baseOctave"), 10),
               chordDurationStr: formData.get("chordDuration"),
               tempo: parseInt(formData.get("tempo"), 10),
               velocity: parseInt(formData.get("velocity"), 10)
             };
+            if (!["none", "first", "smooth"].includes(options.inversionType)) {
+              console.warn(`Invalid inversionType received: ${options.inversionType}. Defaulting to 'none'.`);
+              options.inversionType = "none";
+            }
             const generationResult = midiGenerator.generate(options);
             lastGeneratedResult = generationResult;
             if (isDownloadOnly) {
