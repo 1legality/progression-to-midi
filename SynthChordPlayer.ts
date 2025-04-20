@@ -85,8 +85,9 @@ export class SynthChordPlayer {
      * Plays a chord consisting of multiple MIDI notes.
      * @param midiNotes - An array of MIDI note numbers for the chord.
      * @param durationSeconds - How long the chord should play in seconds.
+     * @param loop - Whether the chord should loop.
      */
-    public playChord(midiNotes: number[], durationSeconds: number = 1.5): void {
+    public playChord(midiNotes: number[], durationSeconds: number = 1.5, loop: boolean = false): void {
         if (!this.audioContext || !this.mainGainNode || !this.reverbGain) {
             console.error("AudioContext or reverb node not available. Cannot play chord.");
             return;
@@ -141,6 +142,11 @@ export class SynthChordPlayer {
                         noteGain.disconnect();
                     } catch (e) { /* Ignore errors if already disconnected */ }
                     this.activeNotes.delete(activeNote);
+
+                    // Restart the chord if looping is enabled
+                    if (loop) {
+                        this.playChord(midiNotes, durationSeconds, loop);
+                    }
                 }
             };
 

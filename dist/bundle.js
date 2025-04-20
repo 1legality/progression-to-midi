@@ -1653,8 +1653,9 @@
          * Plays a chord consisting of multiple MIDI notes.
          * @param midiNotes - An array of MIDI note numbers for the chord.
          * @param durationSeconds - How long the chord should play in seconds.
+         * @param loop - Whether the chord should loop.
          */
-        playChord(midiNotes, durationSeconds = 1.5) {
+        playChord(midiNotes, durationSeconds = 1.5, loop = false) {
           if (!this.audioContext || !this.mainGainNode || !this.reverbGain) {
             console.error("AudioContext or reverb node not available. Cannot play chord.");
             return;
@@ -1696,6 +1697,9 @@
                 } catch (e) {
                 }
                 this.activeNotes.delete(activeNote);
+                if (loop) {
+                  this.playChord(midiNotes, durationSeconds, loop);
+                }
               }
             };
             osc1.start(now);
@@ -1823,6 +1827,7 @@
           statusDiv.classList.remove("text-danger", "text-success");
           statusDiv.classList.add("text-muted");
           try {
+            synth.stopAll();
             const formData = new FormData(form);
             const options = {
               progressionString: formData.get("progression"),
@@ -1876,7 +1881,15 @@
           event.preventDefault();
           handleGeneration(true);
         });
+        let isPlaying = false;
         playButton.addEventListener("click", async () => {
+          if (isPlaying) {
+            synth.stopAll();
+            playButton.textContent = "Play Chord Progression";
+            playButton.classList.remove("stop");
+            isPlaying = false;
+            return;
+          }
           if (!lastGeneratedNotes || lastGeneratedNotes.length === 0) {
             console.warn("No notes to play.");
             return;
@@ -1886,14 +1899,26 @@
           const tempo = parseInt(form.querySelector('[name="tempo"]').value, 10) || 120;
           const ticksPerQuarterNote = 480;
           const secondsPerTick = 60 / tempo / ticksPerQuarterNote;
-          sortedNotes.forEach((note) => {
-            const startTime = note.startTimeTicks * secondsPerTick;
-            const duration = note.durationTicks * secondsPerTick;
+          const playProgression = () => {
+            if (!isPlaying) return;
+            sortedNotes.forEach((note) => {
+              const startTime = note.startTimeTicks * secondsPerTick;
+              const duration = note.durationTicks * secondsPerTick;
+              setTimeout(() => {
+                if (isPlaying) {
+                  synth.playChord([note.midiNote], duration);
+                }
+              }, startTime * 1e3);
+            });
+            const totalDuration = sortedNotes[sortedNotes.length - 1].startTimeTicks * secondsPerTick + sortedNotes[sortedNotes.length - 1].durationTicks * secondsPerTick;
             setTimeout(() => {
-              synth.playChord([note.midiNote], duration);
-            }, startTime * 1e3);
-          });
-          console.log("Chord progression playback started.");
+              if (isPlaying) playProgression();
+            }, totalDuration * 1e3);
+          };
+          isPlaying = true;
+          playButton.textContent = "Stop Chord Progression";
+          playButton.classList.add("stop");
+          playProgression();
         });
         let resizeTimeout;
         window.addEventListener("resize", () => {

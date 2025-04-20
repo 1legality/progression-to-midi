@@ -76,6 +76,9 @@ function setupApp() {
         statusDiv.classList.add('text-muted'); // Bootstrap's text-muted for neutral status
 
         try {
+            // Stop any currently playing chord loop before generating a new preview
+            synth.stopAll();
+
             // 1. Get form data
             const formData = new FormData(form);
             const options: MidiGenerationOptions = {
@@ -143,36 +146,55 @@ function setupApp() {
         handleGeneration(true); // Generate MIDI data only for download
     });
 
-    // --- Handle Play Button Click ---
+    // Add logic to toggle play and stop functionality for the play button
+    let isPlaying = false;
+
     playButton.addEventListener('click', async () => {
+        if (isPlaying) {
+            synth.stopAll();
+            playButton.textContent = 'Play Chord Progression';
+            playButton.classList.remove('stop'); // Remove red styling
+            isPlaying = false;
+            return;
+        }
+
         if (!lastGeneratedNotes || lastGeneratedNotes.length === 0) {
             console.warn("No notes to play.");
             return;
         }
 
-        // Ensure the AudioContext is resumed (required for user interaction)
         await synth.ensureContextResumed();
 
-        // Sort notes by start time to ensure proper playback order
         const sortedNotes = [...lastGeneratedNotes].sort((a, b) => a.startTimeTicks - b.startTimeTicks);
-
-        // Calculate the tempo and tick duration
         const tempo = parseInt((form.querySelector('[name="tempo"]') as HTMLInputElement).value, 10) || 120;
-        const ticksPerQuarterNote = 480; // Standard MIDI resolution
+        const ticksPerQuarterNote = 480;
         const secondsPerTick = (60 / tempo) / ticksPerQuarterNote;
 
-        // Schedule each note/chord
-        sortedNotes.forEach(note => {
-            const startTime = note.startTimeTicks * secondsPerTick;
-            const duration = note.durationTicks * secondsPerTick;
+        const playProgression = () => {
+            if (!isPlaying) return;
 
-            // Schedule the chord to play at the correct time
+            sortedNotes.forEach(note => {
+                const startTime = note.startTimeTicks * secondsPerTick;
+                const duration = note.durationTicks * secondsPerTick;
+
+                setTimeout(() => {
+                    if (isPlaying) {
+                        synth.playChord([note.midiNote], duration);
+                    }
+                }, startTime * 1000);
+            });
+
+            const totalDuration = sortedNotes[sortedNotes.length - 1].startTimeTicks * secondsPerTick + 
+                                  sortedNotes[sortedNotes.length - 1].durationTicks * secondsPerTick;
             setTimeout(() => {
-                synth.playChord([note.midiNote], duration);
-            }, startTime * 1000); // Convert to milliseconds
-        });
+                if (isPlaying) playProgression();
+            }, totalDuration * 1000);
+        };
 
-        console.log("Chord progression playback started.");
+        isPlaying = true;
+        playButton.textContent = 'Stop Chord Progression';
+        playButton.classList.add('stop'); // Add red styling
+        playProgression();
     });
 
     // --- Canvas Resize Listener ---
