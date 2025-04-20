@@ -1,5 +1,17 @@
 // PianoRollDrawer.ts
 
+import { SynthChordPlayer } from './SynthChordPlayer';
+
+// Define or import the ActiveNote interface
+interface ActiveNote {
+    midiNote: number;
+    velocity: number;
+    duration: number;
+    oscillators: OscillatorNode[];
+    noteGain: GainNode;
+    stopTime: number;
+}
+
 interface NoteData {
     midiNote: number;
     startTimeTicks: number;
@@ -18,6 +30,7 @@ export class PianoRollDrawer {
     private ctx: CanvasRenderingContext2D;
     private options: Required<PianoRollOptions>; // Use Required to ensure all options have defaults
     private lastDrawnNotes: NoteData[] = []; // Store notes for redraw on resize
+    private synthPlayer: SynthChordPlayer;
 
     constructor(canvas: HTMLCanvasElement, initialOptions: PianoRollOptions = {}) {
         const ctx = canvas.getContext('2d', { alpha: false });
@@ -35,6 +48,7 @@ export class PianoRollDrawer {
         };
 
         this.resize(); // Initial resize
+        this.synthPlayer = new SynthChordPlayer();
     }
 
     /**
@@ -185,17 +199,40 @@ export class PianoRollDrawer {
         }
         buttonContainer.innerHTML = ''; // Clear existing buttons
 
+        const activeNotesMap = new Map<number, ActiveNote[]>(); // Map to track active notes per button
+
         chords.forEach((chord, index) => {
             const button = document.createElement('button');
             button.className = 'btn btn-outline-primary m-1';
             button.textContent = chord;
-            button.addEventListener('click', () => {
+
+            button.addEventListener('mousedown', () => {
                 if (chordDetails && chordDetails[index]) {
                     this.renderChordDetails([chordDetails[index]]); // Render details for the clicked chord
+                    const midiNotes = chordDetails[index].adjustedVoicing;
+                    const activeNotes = this.synthPlayer.startChord(midiNotes); // Start the chord
+                    activeNotesMap.set(index, activeNotes); // Track active notes for this button
                 } else {
                     console.warn(`No details available for chord at index ${index}`);
                 }
             });
+
+            button.addEventListener('mouseup', () => {
+                const activeNotes = activeNotesMap.get(index);
+                if (activeNotes) {
+                    this.synthPlayer.stopNotes(activeNotes); // Stop the chord
+                    activeNotesMap.delete(index); // Remove from tracking
+                }
+            });
+
+            button.addEventListener('mouseleave', () => {
+                const activeNotes = activeNotesMap.get(index);
+                if (activeNotes) {
+                    this.synthPlayer.stopNotes(activeNotes); // Stop the chord if mouse leaves the button
+                    activeNotesMap.delete(index); // Remove from tracking
+                }
+            });
+
             buttonContainer.appendChild(button);
         });
     }
