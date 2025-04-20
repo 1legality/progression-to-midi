@@ -177,7 +177,7 @@ export class PianoRollDrawer {
     }
 
     // Adjust button rendering to use Bootstrap styling
-    public renderChordButtons(chords: string[]): void {
+    public renderChordButtons(chords: string[], chordDetails: { symbol: string; startTimeTicks: number; durationTicks: number; initialVoicing: number[]; adjustedVoicing: number[]; rootNoteName: string; isValid: boolean; }[]): void {
         const buttonContainer = document.getElementById('chordButtonContainer');
         if (!buttonContainer) {
             console.error('Chord button container not found!');
@@ -185,11 +185,68 @@ export class PianoRollDrawer {
         }
         buttonContainer.innerHTML = ''; // Clear existing buttons
 
-        chords.forEach(chord => {
+        chords.forEach((chord, index) => {
             const button = document.createElement('button');
-            button.className = 'btn btn-outline-primary m-1 disabled';
+            button.className = 'btn btn-outline-primary m-1';
             button.textContent = chord;
+            button.addEventListener('click', () => {
+                if (chordDetails && chordDetails[index]) {
+                    this.renderChordDetails([chordDetails[index]]); // Render details for the clicked chord
+                } else {
+                    console.warn(`No details available for chord at index ${index}`);
+                }
+            });
             buttonContainer.appendChild(button);
+        });
+    }
+
+    /**
+     * Renders chord details (e.g., octave, inversion) on the canvas.
+     * @param chordDetails - Array of chord details to display.
+     */
+    public renderChordDetails(chordDetails: { symbol: string; startTimeTicks: number; durationTicks: number; initialVoicing: number[]; adjustedVoicing: number[]; rootNoteName: string; isValid: boolean; }[]): void {
+        const canvasWidth = this.canvas.clientWidth;
+        const canvasHeight = this.canvas.clientHeight;
+        const dpr = window.devicePixelRatio || 1;
+
+        // Clear the top portion of the canvas for chord details
+        this.ctx.save();
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.ctx.fillStyle = this.options.backgroundColor;
+        this.ctx.fillRect(0, 0, canvasWidth, canvasHeight * 0.1); // Reserve 10% of the canvas height for details
+        this.ctx.restore();
+
+        // Render chord details as text
+        this.ctx.fillStyle = '#000'; // Black text
+        this.ctx.font = '12px sans-serif';
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'top';
+
+        chordDetails.forEach((chord, index) => {
+            const text = `Chord: ${chord.symbol}, Root: ${chord.rootNoteName}, Valid: ${chord.isValid}, Voicing: [${chord.adjustedVoicing.join(', ')}]`;
+            const yPosition = index * 14; // Line height of 14px
+            this.ctx.fillText(text, 10, yPosition); // Start text 10px from the left
+        });
+    }
+
+    /**
+     * Adds click event listeners to chord buttons to display chord details.
+     * @param chordDetails - Array of chord details to associate with buttons.
+     */
+    public setupChordButtonListeners(chordDetails: { symbol: string; startTimeTicks: number; durationTicks: number; initialVoicing: number[]; adjustedVoicing: number[]; rootNoteName: string; isValid: boolean; }[]): void {
+        const buttonContainer = document.getElementById('chordButtonContainer');
+        if (!buttonContainer) {
+            console.error('Chord button container not found!');
+            return;
+        }
+
+        const buttons = buttonContainer.querySelectorAll('button');
+        buttons.forEach((button, index) => {
+            button.addEventListener('click', () => {
+                if (chordDetails[index]) {
+                    this.renderChordDetails([chordDetails[index]]); // Render details for the clicked chord
+                }
+            });
         });
     }
 }

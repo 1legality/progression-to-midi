@@ -1451,7 +1451,7 @@
           const writer = new import_midi_writer_js.default.Writer([track]);
           const midiDataBytes = writer.buildFile();
           const midiBlob = new Blob([midiDataBytes], { type: "audio/midi" });
-          return { notesForPianoRoll, midiBlob, finalFileName };
+          return { notesForPianoRoll, midiBlob, finalFileName, chordDetails: generatedChords };
         }
       };
     }
@@ -1585,18 +1585,67 @@
           this.drawEmptyMessage(message, "#ef4444");
         }
         // Adjust button rendering to use Bootstrap styling
-        renderChordButtons(chords) {
+        renderChordButtons(chords, chordDetails) {
           const buttonContainer = document.getElementById("chordButtonContainer");
           if (!buttonContainer) {
             console.error("Chord button container not found!");
             return;
           }
           buttonContainer.innerHTML = "";
-          chords.forEach((chord) => {
+          chords.forEach((chord, index) => {
             const button = document.createElement("button");
-            button.className = "btn btn-outline-primary m-1 disabled";
+            button.className = "btn btn-outline-primary m-1";
             button.textContent = chord;
+            button.addEventListener("click", () => {
+              if (chordDetails && chordDetails[index]) {
+                this.renderChordDetails([chordDetails[index]]);
+              } else {
+                console.warn(`No details available for chord at index ${index}`);
+              }
+            });
             buttonContainer.appendChild(button);
+          });
+        }
+        /**
+         * Renders chord details (e.g., octave, inversion) on the canvas.
+         * @param chordDetails - Array of chord details to display.
+         */
+        renderChordDetails(chordDetails) {
+          const canvasWidth = this.canvas.clientWidth;
+          const canvasHeight = this.canvas.clientHeight;
+          const dpr = window.devicePixelRatio || 1;
+          this.ctx.save();
+          this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+          this.ctx.fillStyle = this.options.backgroundColor;
+          this.ctx.fillRect(0, 0, canvasWidth, canvasHeight * 0.1);
+          this.ctx.restore();
+          this.ctx.fillStyle = "#000";
+          this.ctx.font = "12px sans-serif";
+          this.ctx.textAlign = "left";
+          this.ctx.textBaseline = "top";
+          chordDetails.forEach((chord, index) => {
+            const text = `Chord: ${chord.symbol}, Root: ${chord.rootNoteName}, Valid: ${chord.isValid}, Voicing: [${chord.adjustedVoicing.join(", ")}]`;
+            const yPosition = index * 14;
+            this.ctx.fillText(text, 10, yPosition);
+          });
+        }
+        /**
+         * Adds click event listeners to chord buttons to display chord details.
+         * @param chordDetails - Array of chord details to associate with buttons.
+         */
+        setupChordButtonListeners(chordDetails) {
+          const buttonContainer = document.getElementById("chordButtonContainer");
+          if (!buttonContainer) {
+            console.error("Chord button container not found!");
+            return;
+          }
+          const buttons = buttonContainer.querySelectorAll("button");
+          buttons.forEach((button, index) => {
+            button.addEventListener("click", () => {
+              if (chordDetails[index]) {
+                this.renderChordDetails([chordDetails[index]]);
+              }
+            });
           });
         }
       };
@@ -1674,9 +1723,11 @@
             const generationResult = midiGenerator.generate(options);
             lastGeneratedResult = generationResult;
             lastGeneratedNotes = generationResult.notesForPianoRoll;
+            const chordDetails = generationResult.chordDetails;
+            console.log("Chord Details:", chordDetails);
             lastGeneratedMidiBlob = generationResult.midiBlob;
             const progressionChords = options.progressionString.split(" ");
-            pianoRollDrawer.renderChordButtons(progressionChords);
+            pianoRollDrawer.renderChordButtons(progressionChords, chordDetails);
             if (isDownloadOnly) {
               triggerDownload(generationResult.midiBlob, generationResult.finalFileName);
               statusDiv.textContent = `MIDI file "${generationResult.finalFileName}" download initiated.`;

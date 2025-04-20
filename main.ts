@@ -94,11 +94,13 @@ function setupApp() {
             const generationResult = midiGenerator.generate(options);
             lastGeneratedResult = generationResult; // Store successful result
             lastGeneratedNotes = generationResult.notesForPianoRoll; // Store notes for playback
+            const chordDetails = generationResult.chordDetails; // Access detailed chord information for further use
+            console.log('Chord Details:', chordDetails); // Example usage: log chord details to the console
             lastGeneratedMidiBlob = generationResult.midiBlob; // Store the MIDI blob for playback
 
             // Render chord buttons for the entire progression
             const progressionChords = options.progressionString.split(' ');
-            pianoRollDrawer.renderChordButtons(progressionChords);
+            pianoRollDrawer.renderChordButtons(progressionChords, chordDetails);
 
             // 3. Update UI / Trigger Download
             if (isDownloadOnly) {

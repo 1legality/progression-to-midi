@@ -81,6 +81,7 @@ export interface MidiGenerationResult {
     notesForPianoRoll: NoteData[];
     midiBlob: Blob;
     finalFileName: string;
+    chordDetails: ChordGenerationData[]; // New property to store detailed chord information
 }
 
 // Intermediate structure to hold chord data during generation
@@ -460,6 +461,6 @@ export class MidiGenerator {
         const midiDataBytes = writer.buildFile();
         const midiBlob = new Blob([midiDataBytes], { type: 'audio/midi' });
 
-        return { notesForPianoRoll, midiBlob, finalFileName };
+        return { notesForPianoRoll, midiBlob, finalFileName, chordDetails: generatedChords };
     }
 }
