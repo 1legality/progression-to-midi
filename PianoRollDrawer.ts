@@ -1,5 +1,7 @@
 // PianoRollDrawer.ts
 
+import { sendChordToMidiDevice, getMidiOutputDevices } from './SendToMidiDevice';
+
 interface NoteData {
     midiNote: number;
     startTimeTicks: number;
@@ -18,6 +20,7 @@ export class PianoRollDrawer {
     private ctx: CanvasRenderingContext2D;
     private options: Required<PianoRollOptions>; // Use Required to ensure all options have defaults
     private lastDrawnNotes: NoteData[] = []; // Store notes for redraw on resize
+    public selectedMidiDeviceId: string | null = null; // Initialize with null
 
     constructor(canvas: HTMLCanvasElement, initialOptions: PianoRollOptions = {}) {
         const ctx = canvas.getContext('2d', { alpha: false });
@@ -189,9 +192,17 @@ export class PianoRollDrawer {
             const button = document.createElement('button');
             button.className = 'btn btn-outline-primary m-1';
             button.textContent = chord;
-            button.addEventListener('click', () => {
+            button.addEventListener('click', async () => {
                 if (chordDetails && chordDetails[index]) {
                     this.renderChordDetails([chordDetails[index]]); // Render details for the clicked chord
+
+                    // Send chord to the selected MIDI device
+                    const { adjustedVoicing, isValid } = chordDetails[index];
+                    if (isValid && adjustedVoicing.length > 0) {
+                        await this.sendChordToSelectedDevice(adjustedVoicing, 90); // Example velocity: 90
+                    } else {
+                        console.warn(`Invalid or empty chord voicing for chord: ${chord}`);
+                    }
                 } else {
                     console.warn(`No details available for chord at index ${index}`);
                 }
@@ -248,5 +259,72 @@ export class PianoRollDrawer {
                 }
             });
         });
+    }
+
+    public async initializeMidiDeviceDropdown(): Promise<void> {
+        const dropdownContainer = document.getElementById('midiDeviceDropdownContainer');
+        if (!dropdownContainer) {
+            console.error('MIDI device dropdown container not found!');
+            return;
+        }
+
+        const devices = await getMidiOutputDevices();
+        if (devices.length === 0) {
+            dropdownContainer.innerHTML = '<p>No MIDI devices available</p>';
+            return;
+        }
+
+        const select = document.createElement('select');
+        select.className = 'form-select';
+        select.addEventListener('change', (event) => {
+            const target = event.target as HTMLSelectElement;
+            this.selectedMidiDeviceId = target.value;
+        });
+
+        devices.forEach(device => {
+            const option = document.createElement('option');
+            option.value = device.id;
+            option.textContent = device.name;
+            select.appendChild(option);
+        });
+
+        dropdownContainer.innerHTML = ''; // Clear existing content
+        dropdownContainer.appendChild(select);
+
+        // Set the first device as the default selection
+        if (devices[0]) {
+            this.selectedMidiDeviceId = devices[0].id;
+        }
+    }
+
+    public async sendChordToSelectedDevice(chordNotes: number[], velocity: number): Promise<void> {
+        if (!this.selectedMidiDeviceId) {
+            console.warn('No MIDI device selected.');
+            return;
+        }
+
+        try {
+            const midiAccess = await navigator.requestMIDIAccess();
+            const output = midiAccess.outputs.get(this.selectedMidiDeviceId);
+            if (!output) {
+                console.error('Selected MIDI device not found.');
+                return;
+            }
+
+            // Send Note On messages for each note in the chord
+            chordNotes.forEach(note => {
+                output.send([0x90, note, velocity]); // 0x90 = Note On, velocity = loudness
+            });
+
+            // Send Note Off messages after a short delay (e.g., 500ms)
+            setTimeout(() => {
+                chordNotes.forEach(note => {
+                    output.send([0x80, note, 0]); // 0x80 = Note Off
+                });
+            }, 500);
+
+        } catch (error) {
+            console.error('Failed to send MIDI message:', error);
+        }
     }
 }

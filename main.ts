@@ -1,6 +1,7 @@
 // main.ts
 import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult } from './MidiGenerator';
 import { PianoRollDrawer } from './PianoRollDrawer';
+import { getMidiOutputDevices, sendChordToMidiDevice } from './SendToMidiDevice';
 
 // Keep NoteData interface accessible if needed by main.ts directly
 interface NoteData {
@@ -24,6 +25,42 @@ function triggerDownload(blob: Blob, filename: string): void {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url); // Clean up
+}
+
+async function setupMidiDeviceDropdown(pianoRollDrawer: PianoRollDrawer): Promise<void> {
+    const dropdownContainer = document.getElementById('midiDeviceDropdownContainer');
+    if (!dropdownContainer) {
+        console.error('MIDI device dropdown container not found!');
+        return;
+    }
+
+    const devices = await getMidiOutputDevices();
+    if (devices.length === 0) {
+        dropdownContainer.innerHTML = '<p>No MIDI devices available</p>';
+        return;
+    }
+
+    const select = document.createElement('select');
+    select.className = 'form-select';
+    select.addEventListener('change', (event) => {
+        const target = event.target as HTMLSelectElement;
+        pianoRollDrawer.selectedMidiDeviceId = target.value;
+    });
+
+    devices.forEach(device => {
+        const option = document.createElement('option');
+        option.value = device.id;
+        option.textContent = device.name;
+        select.appendChild(option);
+    });
+
+    dropdownContainer.innerHTML = ''; // Clear existing content
+    dropdownContainer.appendChild(select);
+
+    // Set the first device as the default selection
+    if (devices[0]) {
+        pianoRollDrawer.selectedMidiDeviceId = devices[0].id;
+    }
 }
 
 function setupApp() {
@@ -123,7 +160,7 @@ function setupApp() {
             pianoRollDrawer.drawErrorMessage("Error generating preview"); // Use drawer's error display
         }
     };
-
+    
     // --- Form Submission Handler (Generate Preview) ---
     form.addEventListener('submit', (event) => {
         event.preventDefault();
@@ -149,6 +186,11 @@ function setupApp() {
     // --- Initial state ---
     statusDiv.textContent = "Enter a progression and click generate.";
     pianoRollDrawer.draw([]); // Draw empty initial state
+
+    // Initialize MIDI device dropdown
+    setupMidiDeviceDropdown(pianoRollDrawer).catch(error => {
+        console.error('Failed to initialize MIDI device dropdown:', error);
+    });
 
 }
 

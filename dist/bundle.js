@@ -1457,16 +1457,36 @@
     }
   });
 
+  // SendToMidiDevice.ts
+  async function getMidiOutputDevices() {
+    try {
+      const midiAccess = await navigator.requestMIDIAccess();
+      const outputs = Array.from(midiAccess.outputs.values());
+      return outputs.map((output) => ({ id: output.id, name: output.name || "Unknown Device" }));
+    } catch (error) {
+      console.error("Failed to fetch MIDI output devices:", error);
+      return [];
+    }
+  }
+  var init_SendToMidiDevice = __esm({
+    "SendToMidiDevice.ts"() {
+      "use strict";
+    }
+  });
+
   // PianoRollDrawer.ts
   var PianoRollDrawer;
   var init_PianoRollDrawer = __esm({
     "PianoRollDrawer.ts"() {
       "use strict";
+      init_SendToMidiDevice();
       PianoRollDrawer = class {
-        // Store notes for redraw on resize
+        // Initialize with null
         constructor(canvas, initialOptions = {}) {
           // Use Required to ensure all options have defaults
           this.lastDrawnNotes = [];
+          // Store notes for redraw on resize
+          this.selectedMidiDeviceId = null;
           const ctx = canvas.getContext("2d", { alpha: false });
           if (!ctx) {
             throw new Error("Could not get 2D context for canvas");
@@ -1596,9 +1616,15 @@
             const button = document.createElement("button");
             button.className = "btn btn-outline-primary m-1";
             button.textContent = chord;
-            button.addEventListener("click", () => {
+            button.addEventListener("click", async () => {
               if (chordDetails && chordDetails[index]) {
                 this.renderChordDetails([chordDetails[index]]);
+                const { adjustedVoicing, isValid } = chordDetails[index];
+                if (isValid && adjustedVoicing.length > 0) {
+                  await this.sendChordToSelectedDevice(adjustedVoicing, 90);
+                } else {
+                  console.warn(`Invalid or empty chord voicing for chord: ${chord}`);
+                }
               } else {
                 console.warn(`No details available for chord at index ${index}`);
               }
@@ -1648,6 +1674,59 @@
             });
           });
         }
+        async initializeMidiDeviceDropdown() {
+          const dropdownContainer = document.getElementById("midiDeviceDropdownContainer");
+          if (!dropdownContainer) {
+            console.error("MIDI device dropdown container not found!");
+            return;
+          }
+          const devices = await getMidiOutputDevices();
+          if (devices.length === 0) {
+            dropdownContainer.innerHTML = "<p>No MIDI devices available</p>";
+            return;
+          }
+          const select = document.createElement("select");
+          select.className = "form-select";
+          select.addEventListener("change", (event) => {
+            const target = event.target;
+            this.selectedMidiDeviceId = target.value;
+          });
+          devices.forEach((device) => {
+            const option = document.createElement("option");
+            option.value = device.id;
+            option.textContent = device.name;
+            select.appendChild(option);
+          });
+          dropdownContainer.innerHTML = "";
+          dropdownContainer.appendChild(select);
+          if (devices[0]) {
+            this.selectedMidiDeviceId = devices[0].id;
+          }
+        }
+        async sendChordToSelectedDevice(chordNotes, velocity) {
+          if (!this.selectedMidiDeviceId) {
+            console.warn("No MIDI device selected.");
+            return;
+          }
+          try {
+            const midiAccess = await navigator.requestMIDIAccess();
+            const output = midiAccess.outputs.get(this.selectedMidiDeviceId);
+            if (!output) {
+              console.error("Selected MIDI device not found.");
+              return;
+            }
+            chordNotes.forEach((note) => {
+              output.send([144, note, velocity]);
+            });
+            setTimeout(() => {
+              chordNotes.forEach((note) => {
+                output.send([128, note, 0]);
+              });
+            }, 500);
+          } catch (error) {
+            console.error("Failed to send MIDI message:", error);
+          }
+        }
       };
     }
   });
@@ -1657,6 +1736,7 @@
     "main.ts"() {
       init_MidiGenerator();
       init_PianoRollDrawer();
+      init_SendToMidiDevice();
       function triggerDownload(blob, filename) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -1666,6 +1746,35 @@
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+      }
+      async function setupMidiDeviceDropdown(pianoRollDrawer) {
+        const dropdownContainer = document.getElementById("midiDeviceDropdownContainer");
+        if (!dropdownContainer) {
+          console.error("MIDI device dropdown container not found!");
+          return;
+        }
+        const devices = await getMidiOutputDevices();
+        if (devices.length === 0) {
+          dropdownContainer.innerHTML = "<p>No MIDI devices available</p>";
+          return;
+        }
+        const select = document.createElement("select");
+        select.className = "form-select";
+        select.addEventListener("change", (event) => {
+          const target = event.target;
+          pianoRollDrawer.selectedMidiDeviceId = target.value;
+        });
+        devices.forEach((device) => {
+          const option = document.createElement("option");
+          option.value = device.id;
+          option.textContent = device.name;
+          select.appendChild(option);
+        });
+        dropdownContainer.innerHTML = "";
+        dropdownContainer.appendChild(select);
+        if (devices[0]) {
+          pianoRollDrawer.selectedMidiDeviceId = devices[0].id;
+        }
       }
       function setupApp() {
         const form = document.getElementById("midiForm");
@@ -1764,6 +1873,9 @@
         });
         statusDiv.textContent = "Enter a progression and click generate.";
         pianoRollDrawer.draw([]);
+        setupMidiDeviceDropdown(pianoRollDrawer).catch((error) => {
+          console.error("Failed to initialize MIDI device dropdown:", error);
+        });
       }
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", setupApp);
