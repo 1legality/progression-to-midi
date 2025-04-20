@@ -159,7 +159,7 @@ function setupApp() {
             button.className = 'btn btn-outline-primary m-1';
             button.textContent = chord;
 
-            // Play chord on mousedown
+            // Play chord on mousedown or touchstart
             button.addEventListener('mousedown', () => {
                 if (chordDetails && chordDetails[index]) {
                     const midiNotes = chordDetails[index].adjustedVoicing;
@@ -169,8 +169,18 @@ function setupApp() {
                     console.warn(`No details available for chord at index ${index}`);
                 }
             });
+            button.addEventListener('touchstart', (event) => {
+                event.preventDefault(); // Prevent mouse event emulation
+                if (chordDetails && chordDetails[index]) {
+                    const midiNotes = chordDetails[index].adjustedVoicing;
+                    const activeNotes = synthChordPlayer.startChord(midiNotes); // Start the chord
+                    activeNotesMap.set(index, activeNotes); // Track active notes for this button
+                } else {
+                    console.warn(`No details available for chord at index ${index}`);
+                }
+            });
 
-            // Stop chord on mouseup
+            // Stop chord on mouseup or touchend
             button.addEventListener('mouseup', () => {
                 const activeNotes = activeNotesMap.get(index);
                 if (activeNotes) {
@@ -178,9 +188,24 @@ function setupApp() {
                     activeNotesMap.delete(index); // Remove from tracking
                 }
             });
+            button.addEventListener('touchend', (event) => {
+                event.preventDefault(); // Prevent mouse event emulation
+                const activeNotes = activeNotesMap.get(index);
+                if (activeNotes) {
+                    synthChordPlayer.stopNotes(activeNotes); // Stop the chord
+                    activeNotesMap.delete(index); // Remove from tracking
+                }
+            });
 
-            // Stop chord if mouse leaves the button
+            // Stop chord if mouse leaves the button or touch is canceled
             button.addEventListener('mouseleave', () => {
+                const activeNotes = activeNotesMap.get(index);
+                if (activeNotes) {
+                    synthChordPlayer.stopNotes(activeNotes); // Stop the chord
+                    activeNotesMap.delete(index); // Remove from tracking
+                }
+            });
+            button.addEventListener('touchcancel', () => {
                 const activeNotes = activeNotesMap.get(index);
                 if (activeNotes) {
                     synthChordPlayer.stopNotes(activeNotes); // Stop the chord
