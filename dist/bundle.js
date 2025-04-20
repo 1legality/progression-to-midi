@@ -1588,195 +1588,11 @@
     }
   });
 
-  // SynthChordPlayer.ts
-  var SynthChordPlayer;
-  var init_SynthChordPlayer = __esm({
-    "SynthChordPlayer.ts"() {
-      "use strict";
-      SynthChordPlayer = class {
-        // Tracks currently playing/scheduled notes
-        /**
-         * Initializes the SynthChordPlayer.
-         * @param initialVolume - The initial master volume (0.0 to 1.0).
-         */
-        constructor(initialVolume = 0.5) {
-          this.audioContext = null;
-          this.mainGainNode = null;
-          this.reverbGain = null;
-          this.delayNodes = [];
-          this.activeNotes = /* @__PURE__ */ new Set();
-          try {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            this.mainGainNode = this.audioContext.createGain();
-            const clampedVolume = Math.max(0, Math.min(1, initialVolume));
-            this.mainGainNode.gain.setValueAtTime(clampedVolume, this.audioContext.currentTime);
-            this.mainGainNode.connect(this.audioContext.destination);
-            this.reverbGain = this.audioContext.createGain();
-            this.reverbGain.gain.setValueAtTime(0.6, this.audioContext.currentTime);
-            for (let i = 0; i < 4; i++) {
-              const delay = this.audioContext.createDelay();
-              delay.delayTime.setValueAtTime(0.3 + i * 0.15, this.audioContext.currentTime);
-              this.delayNodes.push(delay);
-              const feedbackGain = this.audioContext.createGain();
-              feedbackGain.gain.setValueAtTime(0.8, this.audioContext.currentTime);
-              delay.connect(feedbackGain);
-              feedbackGain.connect(delay);
-              feedbackGain.connect(this.reverbGain);
-            }
-            this.reverbGain.connect(this.mainGainNode);
-          } catch (e) {
-            console.error("Web Audio API is not supported or could not be initialized.", e);
-          }
-        }
-        /**
-         * Resumes the AudioContext if it's in a suspended state.
-         * This MUST be called in response to a user gesture (e.g., button click).
-         */
-        ensureContextResumed() {
-          if (this.audioContext && this.audioContext.state === "suspended") {
-            console.log("Resuming AudioContext...");
-            return this.audioContext.resume().then(() => {
-              console.log("AudioContext resumed successfully.");
-            }).catch((e) => console.error("Error resuming AudioContext:", e));
-          }
-          return Promise.resolve();
-        }
-        /**
-         * Converts a MIDI note number to its corresponding frequency in Hertz.
-         * @param midiNote - The MIDI note number (e.g., 60 for Middle C).
-         * @returns The frequency in Hz.
-         */
-        midiNoteToFrequency(midiNote) {
-          return 440 * Math.pow(2, (midiNote - 69) / 12);
-        }
-        /**
-         * Plays a chord consisting of multiple MIDI notes.
-         * @param midiNotes - An array of MIDI note numbers for the chord.
-         * @param durationSeconds - How long the chord should play in seconds.
-         * @param loop - Whether the chord should loop.
-         */
-        playChord(midiNotes, durationSeconds = 1.5, loop = false) {
-          if (!this.audioContext || !this.mainGainNode || !this.reverbGain) {
-            console.error("AudioContext or reverb node not available. Cannot play chord.");
-            return;
-          }
-          const now = this.audioContext.currentTime;
-          const detuneAmount = 6;
-          midiNotes.forEach((note) => {
-            const baseFrequency = this.midiNoteToFrequency(note);
-            const osc1 = this.audioContext.createOscillator();
-            osc1.type = "sawtooth";
-            osc1.frequency.setValueAtTime(baseFrequency, now);
-            osc1.detune.setValueAtTime(-detuneAmount, now);
-            const osc2 = this.audioContext.createOscillator();
-            osc2.type = "sawtooth";
-            osc2.frequency.setValueAtTime(baseFrequency, now);
-            osc2.detune.setValueAtTime(detuneAmount, now);
-            const noteGain = this.audioContext.createGain();
-            const initialGain = 0.8;
-            const attackTime = 0.2;
-            const sustainLevel = 0.4;
-            const decayTime = 0.3;
-            noteGain.gain.setValueAtTime(0, now);
-            noteGain.gain.linearRampToValueAtTime(initialGain, now + attackTime);
-            noteGain.gain.linearRampToValueAtTime(sustainLevel, now + attackTime + decayTime);
-            osc1.connect(noteGain);
-            osc2.connect(noteGain);
-            if (this.reverbGain) {
-              noteGain.connect(this.reverbGain);
-            }
-            const stopTime = now + durationSeconds;
-            const activeNote = { oscillators: [osc1, osc2], noteGain, stopTime };
-            this.activeNotes.add(activeNote);
-            osc1.onended = () => {
-              if (this.activeNotes.has(activeNote)) {
-                try {
-                  osc1.disconnect();
-                  osc2.disconnect();
-                  noteGain.disconnect();
-                } catch (e) {
-                }
-                this.activeNotes.delete(activeNote);
-                if (loop) {
-                  this.playChord(midiNotes, durationSeconds, loop);
-                }
-              }
-            };
-            osc1.start(now);
-            osc2.start(now);
-            osc1.stop(stopTime);
-            osc2.stop(stopTime);
-          });
-        }
-        /**
-         * Immediately stops all currently playing or scheduled sounds managed by this player.
-         * Applies a very short fade-out to prevent clicks.
-         */
-        stopAll() {
-          if (!this.audioContext || this.activeNotes.size === 0) {
-            return;
-          }
-          const now = this.audioContext.currentTime;
-          const fadeOutDuration = 0.05;
-          console.log(`Stopping ${this.activeNotes.size} active notes...`);
-          this.activeNotes.forEach((activeNote) => {
-            if (now < activeNote.stopTime) {
-              activeNote.noteGain.gain.cancelScheduledValues(now);
-              activeNote.noteGain.gain.setValueAtTime(activeNote.noteGain.gain.value, now);
-              activeNote.noteGain.gain.exponentialRampToValueAtTime(1e-4, now + fadeOutDuration);
-              const manualStopTime = now + fadeOutDuration + 0.01;
-              activeNote.oscillators.forEach((osc) => {
-                try {
-                  osc.stop(manualStopTime);
-                } catch (e) {
-                }
-              });
-            } else {
-              setTimeout(() => {
-                if (this.activeNotes.has(activeNote)) {
-                  try {
-                    activeNote.oscillators.forEach((osc) => osc.disconnect());
-                    activeNote.noteGain.disconnect();
-                  } catch (e) {
-                  }
-                  this.activeNotes.delete(activeNote);
-                }
-              }, 50);
-            }
-          });
-          this.activeNotes.clear();
-          console.log("Stop command issued for all active notes.");
-        }
-        /**
-         * Sets the master volume.
-         * @param volume - The desired volume level (0.0 to 1.0).
-         */
-        setVolume(volume) {
-          if (this.mainGainNode && this.audioContext) {
-            const clampedVolume = Math.max(0, Math.min(1, volume));
-            this.mainGainNode.gain.setValueAtTime(clampedVolume, this.audioContext.currentTime);
-          }
-        }
-        /**
-        * Gets the current master volume.
-        * @returns The current volume level (0.0 to 1.0).
-        */
-        getVolume() {
-          if (this.mainGainNode) {
-            return this.mainGainNode.gain.value;
-          }
-          return 0;
-        }
-      };
-    }
-  });
-
   // main.ts
   var require_main = __commonJS({
     "main.ts"() {
       init_MidiGenerator();
       init_PianoRollDrawer();
-      init_SynthChordPlayer();
       function triggerDownload(blob, filename) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -1794,9 +1610,7 @@
         const velocityValueSpan = document.getElementById("velocityValue");
         const pianoRollCanvas = document.getElementById("pianoRollCanvas");
         const downloadMidiOnlyButton = document.getElementById("downloadMidiOnlyButton");
-        const playButtonContainer = document.getElementById("playButtonContainer");
-        const playButton = document.getElementById("playButton");
-        if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton || !playButtonContainer || !playButton) {
+        if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton) {
           console.error("One or more required HTML elements not found!");
           if (statusDiv) statusDiv.textContent = "Error: Could not initialize the application (missing elements).";
           return;
@@ -1815,7 +1629,6 @@
         }
         const midiGenerator = new MidiGenerator();
         let lastGeneratedResult = null;
-        const synth = new SynthChordPlayer(0.5);
         let lastGeneratedNotes = [];
         let lastGeneratedMidiBlob = null;
         velocitySlider.addEventListener("input", (event) => {
@@ -1827,7 +1640,6 @@
           statusDiv.classList.remove("text-danger", "text-success");
           statusDiv.classList.add("text-muted");
           try {
-            synth.stopAll();
             const formData = new FormData(form);
             const options = {
               progressionString: formData.get("progression"),
@@ -1857,11 +1669,6 @@
               statusDiv.textContent = `Preview generated.`;
               statusDiv.classList.replace("text-muted", "text-success");
             }
-            if (lastGeneratedMidiBlob) {
-              playButtonContainer.classList.remove("d-none");
-            } else {
-              playButtonContainer.classList.add("d-none");
-            }
           } catch (error) {
             console.error(`Error during MIDI generation (${actionText}):`, error);
             lastGeneratedResult = null;
@@ -1870,7 +1677,6 @@
             statusDiv.textContent = `Error: ${error.message || "Failed to generate MIDI."}`;
             statusDiv.classList.replace("text-muted", "text-danger");
             pianoRollDrawer.drawErrorMessage("Error generating preview");
-            playButtonContainer.classList.add("d-none");
           }
         };
         form.addEventListener("submit", (event) => {
@@ -1880,45 +1686,6 @@
         downloadMidiOnlyButton.addEventListener("click", (event) => {
           event.preventDefault();
           handleGeneration(true);
-        });
-        let isPlaying = false;
-        playButton.addEventListener("click", async () => {
-          if (isPlaying) {
-            synth.stopAll();
-            playButton.textContent = "Play Chord Progression";
-            playButton.classList.remove("stop");
-            isPlaying = false;
-            return;
-          }
-          if (!lastGeneratedNotes || lastGeneratedNotes.length === 0) {
-            console.warn("No notes to play.");
-            return;
-          }
-          await synth.ensureContextResumed();
-          const sortedNotes = [...lastGeneratedNotes].sort((a, b) => a.startTimeTicks - b.startTimeTicks);
-          const tempo = parseInt(form.querySelector('[name="tempo"]').value, 10) || 120;
-          const ticksPerQuarterNote = 480;
-          const secondsPerTick = 60 / tempo / ticksPerQuarterNote;
-          const playProgression = () => {
-            if (!isPlaying) return;
-            sortedNotes.forEach((note) => {
-              const startTime = note.startTimeTicks * secondsPerTick;
-              const duration = note.durationTicks * secondsPerTick;
-              setTimeout(() => {
-                if (isPlaying) {
-                  synth.playChord([note.midiNote], duration);
-                }
-              }, startTime * 1e3);
-            });
-            const totalDuration = sortedNotes[sortedNotes.length - 1].startTimeTicks * secondsPerTick + sortedNotes[sortedNotes.length - 1].durationTicks * secondsPerTick;
-            setTimeout(() => {
-              if (isPlaying) playProgression();
-            }, totalDuration * 1e3);
-          };
-          isPlaying = true;
-          playButton.textContent = "Stop Chord Progression";
-          playButton.classList.add("stop");
-          playProgression();
         });
         let resizeTimeout;
         window.addEventListener("resize", () => {

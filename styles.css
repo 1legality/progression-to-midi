@@ -40,14 +40,3 @@ body {
     cursor: not-allowed;
     pointer-events: none;
 }
-
-#playButton {
-    background-color: #198754; /* Green for play */
-    color: white;
-}
-
-#playButton.stop {
-    background-color: #dc3545; /* Red for stop */
-    color: white;
-    border-color: #dc3545; /* Match border color to background */
-}

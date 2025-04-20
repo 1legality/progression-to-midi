@@ -1,7 +1,6 @@
 // main.ts
 import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult } from './MidiGenerator';
 import { PianoRollDrawer } from './PianoRollDrawer';
-import { SynthChordPlayer } from './SynthChordPlayer'; 
 
 // Keep NoteData interface accessible if needed by main.ts directly
 interface NoteData {
@@ -10,7 +9,6 @@ interface NoteData {
     durationTicks: number;
     velocity: number;
 }
-
 
 /**
  * Creates a temporary link and clicks it to download a blob.
@@ -35,10 +33,8 @@ function setupApp() {
     const velocityValueSpan = document.getElementById('velocityValue');
     const pianoRollCanvas = document.getElementById('pianoRollCanvas') as HTMLCanvasElement | null;
     const downloadMidiOnlyButton = document.getElementById('downloadMidiOnlyButton') as HTMLButtonElement | null;
-    const playButtonContainer = document.getElementById('playButtonContainer') as HTMLDivElement | null;
-    const playButton = document.getElementById('playButton') as HTMLButtonElement | null;
 
-    if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton || !playButtonContainer || !playButton) {
+    if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton) {
         console.error("One or more required HTML elements not found!");
         if (statusDiv) statusDiv.textContent = "Error: Could not initialize the application (missing elements).";
         return;
@@ -59,7 +55,6 @@ function setupApp() {
 
     const midiGenerator = new MidiGenerator();
     let lastGeneratedResult: MidiGenerationResult | null = null; // Store the last successful result
-    const synth = new SynthChordPlayer(0.5); // Initialize the synthesizer with default volume
     let lastGeneratedNotes: NoteData[] = []; // Store the last generated notes for playback
     let lastGeneratedMidiBlob: Blob | null = null; // Store the generated MIDI blob in memory
 
@@ -76,9 +71,6 @@ function setupApp() {
         statusDiv.classList.add('text-muted'); // Bootstrap's text-muted for neutral status
 
         try {
-            // Stop any currently playing chord loop before generating a new preview
-            synth.stopAll();
-
             // 1. Get form data
             const formData = new FormData(form);
             const options: MidiGenerationOptions = {
@@ -115,13 +107,6 @@ function setupApp() {
                 statusDiv.classList.replace('text-muted', 'text-success'); // Bootstrap's text-success for success
             }
 
-            // Show the play button if there is MIDI data to play
-            if (lastGeneratedMidiBlob) {
-                playButtonContainer.classList.remove('d-none'); // Bootstrap's d-none to show the container
-            } else {
-                playButtonContainer.classList.add('d-none'); // Hide the container
-            }
-
         } catch (error: any) {
             console.error(`Error during MIDI generation (${actionText}):`, error);
             lastGeneratedResult = null; // Clear last result on error
@@ -130,7 +115,6 @@ function setupApp() {
             statusDiv.textContent = `Error: ${error.message || 'Failed to generate MIDI.'}`;
             statusDiv.classList.replace('text-muted', 'text-danger'); // Bootstrap's text-danger for errors
             pianoRollDrawer.drawErrorMessage("Error generating preview"); // Use drawer's error display
-            playButtonContainer.classList.add('d-none'); // Hide play button on error
         }
     };
 
@@ -144,57 +128,6 @@ function setupApp() {
     downloadMidiOnlyButton.addEventListener('click', (event) => {
         event.preventDefault();
         handleGeneration(true); // Generate MIDI data only for download
-    });
-
-    // Add logic to toggle play and stop functionality for the play button
-    let isPlaying = false;
-
-    playButton.addEventListener('click', async () => {
-        if (isPlaying) {
-            synth.stopAll();
-            playButton.textContent = 'Play Chord Progression';
-            playButton.classList.remove('stop'); // Remove red styling
-            isPlaying = false;
-            return;
-        }
-
-        if (!lastGeneratedNotes || lastGeneratedNotes.length === 0) {
-            console.warn("No notes to play.");
-            return;
-        }
-
-        await synth.ensureContextResumed();
-
-        const sortedNotes = [...lastGeneratedNotes].sort((a, b) => a.startTimeTicks - b.startTimeTicks);
-        const tempo = parseInt((form.querySelector('[name="tempo"]') as HTMLInputElement).value, 10) || 120;
-        const ticksPerQuarterNote = 480;
-        const secondsPerTick = (60 / tempo) / ticksPerQuarterNote;
-
-        const playProgression = () => {
-            if (!isPlaying) return;
-
-            sortedNotes.forEach(note => {
-                const startTime = note.startTimeTicks * secondsPerTick;
-                const duration = note.durationTicks * secondsPerTick;
-
-                setTimeout(() => {
-                    if (isPlaying) {
-                        synth.playChord([note.midiNote], duration);
-                    }
-                }, startTime * 1000);
-            });
-
-            const totalDuration = sortedNotes[sortedNotes.length - 1].startTimeTicks * secondsPerTick + 
-                                  sortedNotes[sortedNotes.length - 1].durationTicks * secondsPerTick;
-            setTimeout(() => {
-                if (isPlaying) playProgression();
-            }, totalDuration * 1000);
-        };
-
-        isPlaying = true;
-        playButton.textContent = 'Stop Chord Progression';
-        playButton.classList.add('stop'); // Add red styling
-        playProgression();
     });
 
     // --- Canvas Resize Listener ---
