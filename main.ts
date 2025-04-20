@@ -1,6 +1,7 @@
 // main.ts
 import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult } from './MidiGenerator';
 import { PianoRollDrawer } from './PianoRollDrawer';
+import { SynthChordPlayer } from './SynthChordPlayer';
 
 // Keep NoteData interface accessible if needed by main.ts directly
 interface NoteData {
@@ -55,9 +56,14 @@ function setupApp() {
     }
 
     const midiGenerator = new MidiGenerator();
+    const synthChordPlayer = new SynthChordPlayer();
     let lastGeneratedResult: MidiGenerationResult | null = null; // Store the last successful result
     let lastGeneratedNotes: NoteData[] = []; // Store the last generated notes for playback
     let lastGeneratedMidiBlob: Blob | null = null; // Store the generated MIDI blob in memory
+
+    // Ensure the audio context is resumed on user interaction
+    const resumeAudioContext = () => synthChordPlayer.ensureContextResumed();
+    document.addEventListener('click', resumeAudioContext, { once: true });
 
     // --- Update velocity display ---
     velocitySlider.addEventListener('input', (event) => {
@@ -137,7 +143,7 @@ function setupApp() {
         }
     };
 
-    // Modify renderChordButtons to include indicator update
+    // Modify renderChordButtons to handle chord playback while button is pressed
     pianoRollDrawer.renderChordButtons = (chords, chordDetails) => {
         const buttonContainer = document.getElementById('chordButtonContainer');
         if (!buttonContainer) {
@@ -146,15 +152,39 @@ function setupApp() {
         }
         buttonContainer.innerHTML = '';
 
+        const activeNotesMap = new Map<number, ActiveNote[]>(); // Map to track active notes per button
+
         chords.forEach((chord, index) => {
             const button = document.createElement('button');
             button.className = 'btn btn-outline-primary m-1';
             button.textContent = chord;
 
+            // Play chord on mousedown
             button.addEventListener('mousedown', () => {
-                updateChordIndicator(chord); // Show visual indicator
                 if (chordDetails && chordDetails[index]) {
-                    pianoRollDrawer.renderChordDetails([chordDetails[index]]);
+                    const midiNotes = chordDetails[index].adjustedVoicing;
+                    const activeNotes = synthChordPlayer.startChord(midiNotes); // Start the chord
+                    activeNotesMap.set(index, activeNotes); // Track active notes for this button
+                } else {
+                    console.warn(`No details available for chord at index ${index}`);
+                }
+            });
+
+            // Stop chord on mouseup
+            button.addEventListener('mouseup', () => {
+                const activeNotes = activeNotesMap.get(index);
+                if (activeNotes) {
+                    synthChordPlayer.stopNotes(activeNotes); // Stop the chord
+                    activeNotesMap.delete(index); // Remove from tracking
+                }
+            });
+
+            // Stop chord if mouse leaves the button
+            button.addEventListener('mouseleave', () => {
+                const activeNotes = activeNotesMap.get(index);
+                if (activeNotes) {
+                    synthChordPlayer.stopNotes(activeNotes); // Stop the chord
+                    activeNotesMap.delete(index); // Remove from tracking
                 }
             });
 

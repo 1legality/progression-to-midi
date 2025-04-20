@@ -1532,7 +1532,7 @@
             osc2.connect(noteGain);
             noteGain.connect(this.mainGainNode);
             const stopTime = now + durationSeconds;
-            const activeNote = { oscillators: [osc1, osc2], noteGain, stopTime };
+            const activeNote = { midiNote: note, velocity: initialGain, duration: durationSeconds, oscillators: [osc1, osc2], noteGain, stopTime };
             this.activeNotes.add(activeNote);
             osc1.onended = () => {
               if (this.activeNotes.has(activeNote)) {
@@ -1579,7 +1579,7 @@
             osc1.connect(noteGain);
             osc2.connect(noteGain);
             noteGain.connect(this.mainGainNode);
-            const activeNote = { oscillators: [osc1, osc2], noteGain, stopTime: Infinity };
+            const activeNote = { midiNote: note, velocity: initialGain, duration: Infinity, oscillators: [osc1, osc2], noteGain, stopTime: Infinity };
             this.activeNotes.add(activeNote);
             activeNotes.push(activeNote);
             osc1.start(now);
@@ -1812,88 +1812,6 @@
           this.ctx.restore();
           this.drawEmptyMessage(message, "#ef4444");
         }
-        // Adjust button rendering to use Bootstrap styling
-        renderChordButtons(chords, chordDetails) {
-          const buttonContainer = document.getElementById("chordButtonContainer");
-          if (!buttonContainer) {
-            console.error("Chord button container not found!");
-            return;
-          }
-          buttonContainer.innerHTML = "";
-          const activeNotesMap = /* @__PURE__ */ new Map();
-          chords.forEach((chord, index) => {
-            const button = document.createElement("button");
-            button.className = "btn btn-outline-primary m-1";
-            button.textContent = chord;
-            button.addEventListener("mousedown", () => {
-              if (chordDetails && chordDetails[index]) {
-                this.renderChordDetails([chordDetails[index]]);
-                const midiNotes = chordDetails[index].adjustedVoicing;
-                const activeNotes = this.synthPlayer.startChord(midiNotes);
-                activeNotesMap.set(index, activeNotes);
-              } else {
-                console.warn(`No details available for chord at index ${index}`);
-              }
-            });
-            button.addEventListener("mouseup", () => {
-              const activeNotes = activeNotesMap.get(index);
-              if (activeNotes) {
-                this.synthPlayer.stopNotes(activeNotes);
-                activeNotesMap.delete(index);
-              }
-            });
-            button.addEventListener("mouseleave", () => {
-              const activeNotes = activeNotesMap.get(index);
-              if (activeNotes) {
-                this.synthPlayer.stopNotes(activeNotes);
-                activeNotesMap.delete(index);
-              }
-            });
-            buttonContainer.appendChild(button);
-          });
-        }
-        /**
-         * Renders chord details (e.g., octave, inversion) on the canvas.
-         * @param chordDetails - Array of chord details to display.
-         */
-        renderChordDetails(chordDetails) {
-          const canvasWidth = this.canvas.clientWidth;
-          const canvasHeight = this.canvas.clientHeight;
-          const dpr = window.devicePixelRatio || 1;
-          this.ctx.save();
-          this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-          this.ctx.fillStyle = this.options.backgroundColor;
-          this.ctx.fillRect(0, 0, canvasWidth, canvasHeight * 0.1);
-          this.ctx.restore();
-          this.ctx.fillStyle = "#000";
-          this.ctx.font = "12px sans-serif";
-          this.ctx.textAlign = "left";
-          this.ctx.textBaseline = "top";
-          chordDetails.forEach((chord, index) => {
-            const text = `Chord: ${chord.symbol}, Root: ${chord.rootNoteName}, Valid: ${chord.isValid}, Voicing: [${chord.adjustedVoicing.join(", ")}]`;
-            const yPosition = index * 14;
-            this.ctx.fillText(text, 10, yPosition);
-          });
-        }
-        /**
-         * Adds click event listeners to chord buttons to display chord details.
-         * @param chordDetails - Array of chord details to associate with buttons.
-         */
-        setupChordButtonListeners(chordDetails) {
-          const buttonContainer = document.getElementById("chordButtonContainer");
-          if (!buttonContainer) {
-            console.error("Chord button container not found!");
-            return;
-          }
-          const buttons = buttonContainer.querySelectorAll("button");
-          buttons.forEach((button, index) => {
-            button.addEventListener("click", () => {
-              if (chordDetails[index]) {
-                this.renderChordDetails([chordDetails[index]]);
-              }
-            });
-          });
-        }
       };
     }
   });
@@ -1903,6 +1821,7 @@
     "main.ts"() {
       init_MidiGenerator();
       init_PianoRollDrawer();
+      init_SynthChordPlayer();
       function triggerDownload(blob, filename) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -1920,6 +1839,7 @@
         const velocityValueSpan = document.getElementById("velocityValue");
         const pianoRollCanvas = document.getElementById("pianoRollCanvas");
         const downloadMidiOnlyButton = document.getElementById("downloadMidiOnlyButton");
+        const chordIndicator = document.getElementById("chordIndicator");
         if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton) {
           console.error("One or more required HTML elements not found!");
           if (statusDiv) statusDiv.textContent = "Error: Could not initialize the application (missing elements).";
@@ -1938,12 +1858,25 @@
           return;
         }
         const midiGenerator = new MidiGenerator();
+        const synthChordPlayer = new SynthChordPlayer();
         let lastGeneratedResult = null;
         let lastGeneratedNotes = [];
         let lastGeneratedMidiBlob = null;
+        const resumeAudioContext = () => synthChordPlayer.ensureContextResumed();
+        document.addEventListener("click", resumeAudioContext, { once: true });
         velocitySlider.addEventListener("input", (event) => {
           velocityValueSpan.textContent = event.target.value;
         });
+        const updateChordIndicator = (chord) => {
+          if (chordIndicator) {
+            chordIndicator.textContent = `Playing: ${chord}`;
+            chordIndicator.classList.add("text-primary");
+            setTimeout(() => {
+              chordIndicator.textContent = "";
+              chordIndicator.classList.remove("text-primary");
+            }, 2e3);
+          }
+        };
         const handleGeneration = (isDownloadOnly) => {
           const actionText = isDownloadOnly ? "Generating MIDI file" : "Generating preview and MIDI";
           statusDiv.textContent = `${actionText}...`;
@@ -1992,6 +1925,44 @@
             statusDiv.classList.replace("text-muted", "text-danger");
             pianoRollDrawer.drawErrorMessage("Error generating preview");
           }
+        };
+        pianoRollDrawer.renderChordButtons = (chords, chordDetails) => {
+          const buttonContainer = document.getElementById("chordButtonContainer");
+          if (!buttonContainer) {
+            console.error("Chord button container not found!");
+            return;
+          }
+          buttonContainer.innerHTML = "";
+          const activeNotesMap = /* @__PURE__ */ new Map();
+          chords.forEach((chord, index) => {
+            const button = document.createElement("button");
+            button.className = "btn btn-outline-primary m-1";
+            button.textContent = chord;
+            button.addEventListener("mousedown", () => {
+              if (chordDetails && chordDetails[index]) {
+                const midiNotes = chordDetails[index].adjustedVoicing;
+                const activeNotes = synthChordPlayer.startChord(midiNotes);
+                activeNotesMap.set(index, activeNotes);
+              } else {
+                console.warn(`No details available for chord at index ${index}`);
+              }
+            });
+            button.addEventListener("mouseup", () => {
+              const activeNotes = activeNotesMap.get(index);
+              if (activeNotes) {
+                synthChordPlayer.stopNotes(activeNotes);
+                activeNotesMap.delete(index);
+              }
+            });
+            button.addEventListener("mouseleave", () => {
+              const activeNotes = activeNotesMap.get(index);
+              if (activeNotes) {
+                synthChordPlayer.stopNotes(activeNotes);
+                activeNotesMap.delete(index);
+              }
+            });
+            buttonContainer.appendChild(button);
+          });
         };
         form.addEventListener("submit", (event) => {
           event.preventDefault();
