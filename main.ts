@@ -1,7 +1,7 @@
 // main.ts
 import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult } from './MidiGenerator';
 import { PianoRollDrawer } from './PianoRollDrawer';
-import { SynthChordPlayer } from './SynthChordPlayer';
+import { SynthChordPlayer, ActiveNote } from './SynthChordPlayer';
 
 // Keep NoteData interface accessible if needed by main.ts directly
 interface NoteData {

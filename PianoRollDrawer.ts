@@ -189,4 +189,50 @@ export class PianoRollDrawer {
 
         this.drawEmptyMessage(message, '#ef4444'); // red-500
     }
+
+    public renderChordButtons(chords: string[], chordDetails: { symbol: string; startTimeTicks: number; durationTicks: number; initialVoicing: number[]; adjustedVoicing: number[]; rootNoteName: string; isValid: boolean; }[]): void {
+        const buttonContainer = document.getElementById('chordButtonContainer');
+        if (!buttonContainer) {
+            console.error('Chord button container not found!');
+            return;
+        }
+        buttonContainer.innerHTML = ''; // Clear existing buttons
+
+        const activeNotesMap = new Map<number, ActiveNote[]>(); // Map to track active notes per button
+
+        chords.forEach((chord, index) => {
+            const button = document.createElement('button');
+            button.className = 'btn btn-outline-primary m-1';
+            button.textContent = chord;
+
+            // When you click on the buttons, you should hear the sound of the corresponding chord.
+            button.addEventListener('mousedown', () => {
+                if (chordDetails && chordDetails[index]) {
+                    const midiNotes = chordDetails[index].adjustedVoicing;
+                    const activeNotes = this.synthPlayer.startChord(midiNotes); // Start the chord
+                    activeNotesMap.set(index, activeNotes); // Track active notes for this button
+                } else {
+                    console.warn(`No details available for chord at index ${index}`);
+                }
+            });
+
+            button.addEventListener('mouseup', () => {
+                const activeNotes = activeNotesMap.get(index);
+                if (activeNotes) {
+                    this.synthPlayer.stopNotes(activeNotes); // Stop the chord
+                    activeNotesMap.delete(index); // Remove from tracking
+                }
+            });
+
+            button.addEventListener('mouseleave', () => {
+                const activeNotes = activeNotesMap.get(index);
+                if (activeNotes) {
+                    this.synthPlayer.stopNotes(activeNotes); // Stop the chord if mouse leaves the button
+                    activeNotesMap.delete(index); // Remove from tracking
+                }
+            });
+
+            buttonContainer.appendChild(button);
+        });
+    }
 }

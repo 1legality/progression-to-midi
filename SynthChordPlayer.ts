@@ -1,14 +1,10 @@
-/**
- * Represents an active note being played, holding references
- * to its oscillators and gain node for management (e.g., stopping).
- */
-interface ActiveNote {
+// Export ActiveNote interface
+export interface ActiveNote {
     midiNote: number;
     velocity: number;
     duration: number;
     oscillators: OscillatorNode[];
     noteGain: GainNode;
-    // Store the intended stop time for potential cleanup checks
     stopTime: number;
 }
 

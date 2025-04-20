@@ -1812,6 +1812,44 @@
           this.ctx.restore();
           this.drawEmptyMessage(message, "#ef4444");
         }
+        renderChordButtons(chords, chordDetails) {
+          const buttonContainer = document.getElementById("chordButtonContainer");
+          if (!buttonContainer) {
+            console.error("Chord button container not found!");
+            return;
+          }
+          buttonContainer.innerHTML = "";
+          const activeNotesMap = /* @__PURE__ */ new Map();
+          chords.forEach((chord, index) => {
+            const button = document.createElement("button");
+            button.className = "btn btn-outline-primary m-1";
+            button.textContent = chord;
+            button.addEventListener("mousedown", () => {
+              if (chordDetails && chordDetails[index]) {
+                const midiNotes = chordDetails[index].adjustedVoicing;
+                const activeNotes = this.synthPlayer.startChord(midiNotes);
+                activeNotesMap.set(index, activeNotes);
+              } else {
+                console.warn(`No details available for chord at index ${index}`);
+              }
+            });
+            button.addEventListener("mouseup", () => {
+              const activeNotes = activeNotesMap.get(index);
+              if (activeNotes) {
+                this.synthPlayer.stopNotes(activeNotes);
+                activeNotesMap.delete(index);
+              }
+            });
+            button.addEventListener("mouseleave", () => {
+              const activeNotes = activeNotesMap.get(index);
+              if (activeNotes) {
+                this.synthPlayer.stopNotes(activeNotes);
+                activeNotesMap.delete(index);
+              }
+            });
+            buttonContainer.appendChild(button);
+          });
+        }
       };
     }
   });
