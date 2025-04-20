@@ -1985,6 +1985,16 @@
                 console.warn(`No details available for chord at index ${index}`);
               }
             });
+            button.addEventListener("touchstart", (event) => {
+              event.preventDefault();
+              if (chordDetails && chordDetails[index]) {
+                const midiNotes = chordDetails[index].adjustedVoicing;
+                const activeNotes = synthChordPlayer.startChord(midiNotes);
+                activeNotesMap.set(index, activeNotes);
+              } else {
+                console.warn(`No details available for chord at index ${index}`);
+              }
+            });
             button.addEventListener("mouseup", () => {
               const activeNotes = activeNotesMap.get(index);
               if (activeNotes) {
@@ -1992,7 +2002,22 @@
                 activeNotesMap.delete(index);
               }
             });
+            button.addEventListener("touchend", (event) => {
+              event.preventDefault();
+              const activeNotes = activeNotesMap.get(index);
+              if (activeNotes) {
+                synthChordPlayer.stopNotes(activeNotes);
+                activeNotesMap.delete(index);
+              }
+            });
             button.addEventListener("mouseleave", () => {
+              const activeNotes = activeNotesMap.get(index);
+              if (activeNotes) {
+                synthChordPlayer.stopNotes(activeNotes);
+                activeNotesMap.delete(index);
+              }
+            });
+            button.addEventListener("touchcancel", () => {
               const activeNotes = activeNotesMap.get(index);
               if (activeNotes) {
                 synthChordPlayer.stopNotes(activeNotes);
