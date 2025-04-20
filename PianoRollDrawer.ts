@@ -206,6 +206,7 @@ export class PianoRollDrawer {
             button.className = 'btn btn-outline-primary m-1';
             button.textContent = chord;
 
+            // When you click on the buttons, you should hear the sound of the corresponding chord.
             button.addEventListener('mousedown', () => {
                 if (chordDetails && chordDetails[index]) {
                     this.renderChordDetails([chordDetails[index]]); // Render details for the clicked chord

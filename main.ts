@@ -33,6 +33,7 @@ function setupApp() {
     const velocityValueSpan = document.getElementById('velocityValue');
     const pianoRollCanvas = document.getElementById('pianoRollCanvas') as HTMLCanvasElement | null;
     const downloadMidiOnlyButton = document.getElementById('downloadMidiOnlyButton') as HTMLButtonElement | null;
+    const chordIndicator = document.getElementById('chordIndicator');
 
     if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton) {
         console.error("One or more required HTML elements not found!");
@@ -62,6 +63,18 @@ function setupApp() {
     velocitySlider.addEventListener('input', (event) => {
         velocityValueSpan.textContent = (event.target as HTMLInputElement).value;
     });
+
+    // Update chord button click logic to show a visual indicator
+    const updateChordIndicator = (chord: string) => {
+        if (chordIndicator) {
+            chordIndicator.textContent = `Playing: ${chord}`;
+            chordIndicator.classList.add('text-primary');
+            setTimeout(() => {
+                chordIndicator.textContent = '';
+                chordIndicator.classList.remove('text-primary');
+            }, 2000); // Reset after 2 seconds
+        }
+    };
 
     // --- Common function to get options and generate MIDI ---
     const handleGeneration = (isDownloadOnly: boolean): void => {
@@ -122,6 +135,31 @@ function setupApp() {
             statusDiv.classList.replace('text-muted', 'text-danger'); // Bootstrap's text-danger for errors
             pianoRollDrawer.drawErrorMessage("Error generating preview"); // Use drawer's error display
         }
+    };
+
+    // Modify renderChordButtons to include indicator update
+    pianoRollDrawer.renderChordButtons = (chords, chordDetails) => {
+        const buttonContainer = document.getElementById('chordButtonContainer');
+        if (!buttonContainer) {
+            console.error('Chord button container not found!');
+            return;
+        }
+        buttonContainer.innerHTML = '';
+
+        chords.forEach((chord, index) => {
+            const button = document.createElement('button');
+            button.className = 'btn btn-outline-primary m-1';
+            button.textContent = chord;
+
+            button.addEventListener('mousedown', () => {
+                updateChordIndicator(chord); // Show visual indicator
+                if (chordDetails && chordDetails[index]) {
+                    pianoRollDrawer.renderChordDetails([chordDetails[index]]);
+                }
+            });
+
+            buttonContainer.appendChild(button);
+        });
     };
 
     // --- Form Submission Handler (Generate Preview) ---
