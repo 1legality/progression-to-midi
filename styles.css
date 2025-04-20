@@ -40,3 +40,10 @@ body {
     cursor: not-allowed;
     pointer-events: none;
 }
+
+#chordButtonContainer {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem; /* Optional spacing between buttons */
+}

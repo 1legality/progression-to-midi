@@ -96,6 +96,10 @@ function setupApp() {
             lastGeneratedNotes = generationResult.notesForPianoRoll; // Store notes for playback
             lastGeneratedMidiBlob = generationResult.midiBlob; // Store the MIDI blob for playback
 
+            // Render chord buttons for the entire progression
+            const progressionChords = options.progressionString.split(' ');
+            pianoRollDrawer.renderChordButtons(progressionChords);
+
             // 3. Update UI / Trigger Download
             if (isDownloadOnly) {
                 triggerDownload(generationResult.midiBlob, generationResult.finalFileName);

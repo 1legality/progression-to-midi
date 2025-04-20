@@ -1584,6 +1584,21 @@
           this.ctx.restore();
           this.drawEmptyMessage(message, "#ef4444");
         }
+        // Adjust button rendering to use Bootstrap styling
+        renderChordButtons(chords) {
+          const buttonContainer = document.getElementById("chordButtonContainer");
+          if (!buttonContainer) {
+            console.error("Chord button container not found!");
+            return;
+          }
+          buttonContainer.innerHTML = "";
+          chords.forEach((chord) => {
+            const button = document.createElement("button");
+            button.className = "btn btn-outline-primary m-1 disabled";
+            button.textContent = chord;
+            buttonContainer.appendChild(button);
+          });
+        }
       };
     }
   });
@@ -1660,6 +1675,8 @@
             lastGeneratedResult = generationResult;
             lastGeneratedNotes = generationResult.notesForPianoRoll;
             lastGeneratedMidiBlob = generationResult.midiBlob;
+            const progressionChords = options.progressionString.split(" ");
+            pianoRollDrawer.renderChordButtons(progressionChords);
             if (isDownloadOnly) {
               triggerDownload(generationResult.midiBlob, generationResult.finalFileName);
               statusDiv.textContent = `MIDI file "${generationResult.finalFileName}" download initiated.`;

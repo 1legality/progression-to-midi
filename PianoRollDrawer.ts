@@ -175,4 +175,21 @@ export class PianoRollDrawer {
 
         this.drawEmptyMessage(message, '#ef4444'); // red-500
     }
+
+    // Adjust button rendering to use Bootstrap styling
+    public renderChordButtons(chords: string[]): void {
+        const buttonContainer = document.getElementById('chordButtonContainer');
+        if (!buttonContainer) {
+            console.error('Chord button container not found!');
+            return;
+        }
+        buttonContainer.innerHTML = ''; // Clear existing buttons
+
+        chords.forEach(chord => {
+            const button = document.createElement('button');
+            button.className = 'btn btn-outline-primary m-1 disabled';
+            button.textContent = chord;
+            buttonContainer.appendChild(button);
+        });
+    }
 }
