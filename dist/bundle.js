@@ -1602,6 +1602,8 @@
         constructor(initialVolume = 0.5) {
           this.audioContext = null;
           this.mainGainNode = null;
+          this.reverbGain = null;
+          this.delayNodes = [];
           this.activeNotes = /* @__PURE__ */ new Set();
           try {
             this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -1609,6 +1611,19 @@
             const clampedVolume = Math.max(0, Math.min(1, initialVolume));
             this.mainGainNode.gain.setValueAtTime(clampedVolume, this.audioContext.currentTime);
             this.mainGainNode.connect(this.audioContext.destination);
+            this.reverbGain = this.audioContext.createGain();
+            this.reverbGain.gain.setValueAtTime(0.6, this.audioContext.currentTime);
+            for (let i = 0; i < 4; i++) {
+              const delay = this.audioContext.createDelay();
+              delay.delayTime.setValueAtTime(0.3 + i * 0.15, this.audioContext.currentTime);
+              this.delayNodes.push(delay);
+              const feedbackGain = this.audioContext.createGain();
+              feedbackGain.gain.setValueAtTime(0.8, this.audioContext.currentTime);
+              delay.connect(feedbackGain);
+              feedbackGain.connect(delay);
+              feedbackGain.connect(this.reverbGain);
+            }
+            this.reverbGain.connect(this.mainGainNode);
           } catch (e) {
             console.error("Web Audio API is not supported or could not be initialized.", e);
           }
@@ -1640,8 +1655,8 @@
          * @param durationSeconds - How long the chord should play in seconds.
          */
         playChord(midiNotes, durationSeconds = 1.5) {
-          if (!this.audioContext || !this.mainGainNode) {
-            console.error("AudioContext not available. Cannot play chord.");
+          if (!this.audioContext || !this.mainGainNode || !this.reverbGain) {
+            console.error("AudioContext or reverb node not available. Cannot play chord.");
             return;
           }
           const now = this.audioContext.currentTime;
@@ -1657,11 +1672,18 @@
             osc2.frequency.setValueAtTime(baseFrequency, now);
             osc2.detune.setValueAtTime(detuneAmount, now);
             const noteGain = this.audioContext.createGain();
-            const initialGain = 0.4;
-            noteGain.gain.setValueAtTime(initialGain, now);
+            const initialGain = 0.8;
+            const attackTime = 0.2;
+            const sustainLevel = 0.4;
+            const decayTime = 0.3;
+            noteGain.gain.setValueAtTime(0, now);
+            noteGain.gain.linearRampToValueAtTime(initialGain, now + attackTime);
+            noteGain.gain.linearRampToValueAtTime(sustainLevel, now + attackTime + decayTime);
             osc1.connect(noteGain);
             osc2.connect(noteGain);
-            noteGain.connect(this.mainGainNode);
+            if (this.reverbGain) {
+              noteGain.connect(this.reverbGain);
+            }
             const stopTime = now + durationSeconds;
             const activeNote = { oscillators: [osc1, osc2], noteGain, stopTime };
             this.activeNotes.add(activeNote);

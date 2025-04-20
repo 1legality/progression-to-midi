@@ -16,6 +16,8 @@ interface ActiveNote {
 export class SynthChordPlayer {
     public audioContext: AudioContext | null = null;
     private mainGainNode: GainNode | null = null;
+    private reverbGain: GainNode | null = null;
+    private delayNodes: DelayNode[] = [];
     private activeNotes: Set<ActiveNote> = new Set(); // Tracks currently playing/scheduled notes
 
     /**
@@ -31,9 +33,27 @@ export class SynthChordPlayer {
             const clampedVolume = Math.max(0, Math.min(1, initialVolume));
             this.mainGainNode.gain.setValueAtTime(clampedVolume, this.audioContext.currentTime);
             this.mainGainNode.connect(this.audioContext.destination);
+
+            // Create algorithmic reverb using feedback delay network
+            this.reverbGain = this.audioContext.createGain();
+            this.reverbGain.gain.setValueAtTime(0.6, this.audioContext.currentTime); // Increase reverb intensity for a cave-like effect
+
+            // Create multiple delay nodes for the reverb effect
+            for (let i = 0; i < 4; i++) {
+                const delay = this.audioContext.createDelay();
+                delay.delayTime.setValueAtTime(0.3 + i * 0.15, this.audioContext.currentTime); // Longer delays for cave effect
+                this.delayNodes.push(delay);
+                const feedbackGain = this.audioContext.createGain();
+                feedbackGain.gain.setValueAtTime(0.8, this.audioContext.currentTime); // Higher feedback for extended reverb tail
+                delay.connect(feedbackGain);
+                feedbackGain.connect(delay); // Feedback loop
+                feedbackGain.connect(this.reverbGain);
+            }
+
+            // Connect the reverb gain to the main gain node
+            this.reverbGain.connect(this.mainGainNode);
         } catch (e) {
             console.error("Web Audio API is not supported or could not be initialized.", e);
-            // Handle the error appropriately in a real app (e.g., disable audio features)
         }
     }
 
@@ -67,8 +87,8 @@ export class SynthChordPlayer {
      * @param durationSeconds - How long the chord should play in seconds.
      */
     public playChord(midiNotes: number[], durationSeconds: number = 1.5): void {
-        if (!this.audioContext || !this.mainGainNode) {
-            console.error("AudioContext not available. Cannot play chord.");
+        if (!this.audioContext || !this.mainGainNode || !this.reverbGain) {
+            console.error("AudioContext or reverb node not available. Cannot play chord.");
             return;
         }
 
@@ -91,13 +111,21 @@ export class SynthChordPlayer {
 
             // --- Gain Node per Note (for envelope) ---
             const noteGain = this.audioContext!.createGain();
-            const initialGain = 0.4; // Set volume to 50%
-            noteGain.gain.setValueAtTime(initialGain, now); // Sustain at 50% volume
+            const initialGain = 0.8; // Set volume to 50%
+            const attackTime = 0.2; // Increase attack time for a smoother onset
+            const sustainLevel = 0.4; // Set sustain level to 0.4
+            const decayTime = 0.3; // Time to reach sustain level after attack
+
+            noteGain.gain.setValueAtTime(0.0, now); // Start at 0 volume
+            noteGain.gain.linearRampToValueAtTime(initialGain, now + attackTime); // Ramp up to initial gain over attack time
+            noteGain.gain.linearRampToValueAtTime(sustainLevel, now + attackTime + decayTime); // Ramp down to sustain level over decay time
 
             // --- Connections ---
             osc1.connect(noteGain);
             osc2.connect(noteGain);
-            noteGain.connect(this.mainGainNode!); // Connect note's gain to master gain
+            if (this.reverbGain) {
+                noteGain.connect(this.reverbGain); // Connect note's gain to reverb network
+            }
 
             // --- Tracking and Cleanup ---
             const stopTime = now + durationSeconds;
