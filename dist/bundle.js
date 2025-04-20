@@ -1122,7 +1122,13 @@
         "m11": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.P11],
         "13": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.M13],
         "maj13": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M7, INTERVALS.M9, INTERVALS.M13],
-        "m13": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.M13]
+        "m13": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.M13],
+        "13(#11)": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.A4, INTERVALS.M13],
+        "7alt": [INTERVALS.P1, INTERVALS.m3, INTERVALS.d5, INTERVALS.m7],
+        // Altered dominant (simplified)
+        "13sus4": [INTERVALS.P1, INTERVALS.P4, INTERVALS.P5, INTERVALS.m7, INTERVALS.M9, INTERVALS.M13],
+        "7b9": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.m9],
+        "13b9": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.m9, INTERVALS.M13]
       };
       TPQN = 128;
       OCTAVE_ADJUSTMENT_THRESHOLD = 6;
@@ -1614,20 +1620,25 @@
           pianoRollDrawer = new PianoRollDrawer(pianoRollCanvas);
         } catch (error) {
           console.error("Failed to initialize PianoRollDrawer:", error);
-          if (statusDiv) statusDiv.textContent = `Error: Canvas setup failed - ${error.message}`;
+          if (statusDiv) {
+            statusDiv.textContent = `Error: Canvas setup failed - ${error.message}`;
+            statusDiv.classList.add("text-danger");
+          }
           pianoRollCanvas.style.border = "2px solid red";
           return;
         }
         const midiGenerator = new MidiGenerator();
         let lastGeneratedResult = null;
+        let lastGeneratedNotes = [];
+        let lastGeneratedMidiBlob = null;
         velocitySlider.addEventListener("input", (event) => {
           velocityValueSpan.textContent = event.target.value;
         });
         const handleGeneration = (isDownloadOnly) => {
           const actionText = isDownloadOnly ? "Generating MIDI file" : "Generating preview and MIDI";
           statusDiv.textContent = `${actionText}...`;
-          statusDiv.classList.remove("text-red-600", "text-green-600");
-          statusDiv.classList.add("text-gray-600");
+          statusDiv.classList.remove("text-danger", "text-success");
+          statusDiv.classList.add("text-muted");
           try {
             const formData = new FormData(form);
             const options = {
@@ -1647,20 +1658,24 @@
             }
             const generationResult = midiGenerator.generate(options);
             lastGeneratedResult = generationResult;
+            lastGeneratedNotes = generationResult.notesForPianoRoll;
+            lastGeneratedMidiBlob = generationResult.midiBlob;
             if (isDownloadOnly) {
               triggerDownload(generationResult.midiBlob, generationResult.finalFileName);
               statusDiv.textContent = `MIDI file "${generationResult.finalFileName}" download initiated.`;
-              statusDiv.classList.replace("text-gray-600", "text-green-600");
+              statusDiv.classList.replace("text-muted", "text-success");
             } else {
               pianoRollDrawer.draw(generationResult.notesForPianoRoll);
               statusDiv.textContent = `Preview generated.`;
-              statusDiv.classList.replace("text-gray-600", "text-green-600");
+              statusDiv.classList.replace("text-muted", "text-success");
             }
           } catch (error) {
             console.error(`Error during MIDI generation (${actionText}):`, error);
             lastGeneratedResult = null;
+            lastGeneratedNotes = [];
+            lastGeneratedMidiBlob = null;
             statusDiv.textContent = `Error: ${error.message || "Failed to generate MIDI."}`;
-            statusDiv.classList.replace("text-gray-600", "text-red-600");
+            statusDiv.classList.replace("text-muted", "text-danger");
             pianoRollDrawer.drawErrorMessage("Error generating preview");
           }
         };

@@ -10,7 +10,6 @@ interface NoteData {
     velocity: number;
 }
 
-
 /**
  * Creates a temporary link and clicks it to download a blob.
  * @param blob - The Blob to download.
@@ -46,13 +45,18 @@ function setupApp() {
         pianoRollDrawer = new PianoRollDrawer(pianoRollCanvas);
     } catch (error: any) {
         console.error("Failed to initialize PianoRollDrawer:", error);
-        if (statusDiv) statusDiv.textContent = `Error: Canvas setup failed - ${error.message}`;
+        if (statusDiv) {
+            statusDiv.textContent = `Error: Canvas setup failed - ${error.message}`;
+            statusDiv.classList.add('text-danger'); // Bootstrap's text-danger for error styling
+        }
         pianoRollCanvas.style.border = '2px solid red'; // Visual indicator
         return;
     }
 
     const midiGenerator = new MidiGenerator();
     let lastGeneratedResult: MidiGenerationResult | null = null; // Store the last successful result
+    let lastGeneratedNotes: NoteData[] = []; // Store the last generated notes for playback
+    let lastGeneratedMidiBlob: Blob | null = null; // Store the generated MIDI blob in memory
 
     // --- Update velocity display ---
     velocitySlider.addEventListener('input', (event) => {
@@ -63,8 +67,8 @@ function setupApp() {
     const handleGeneration = (isDownloadOnly: boolean): void => {
         const actionText = isDownloadOnly ? "Generating MIDI file" : "Generating preview and MIDI";
         statusDiv.textContent = `${actionText}...`;
-        statusDiv.classList.remove('text-red-600', 'text-green-600');
-        statusDiv.classList.add('text-gray-600');
+        statusDiv.classList.remove('text-danger', 'text-success');
+        statusDiv.classList.add('text-muted'); // Bootstrap's text-muted for neutral status
 
         try {
             // 1. Get form data
@@ -89,25 +93,27 @@ function setupApp() {
             // 2. Generate MIDI and Notes
             const generationResult = midiGenerator.generate(options);
             lastGeneratedResult = generationResult; // Store successful result
+            lastGeneratedNotes = generationResult.notesForPianoRoll; // Store notes for playback
+            lastGeneratedMidiBlob = generationResult.midiBlob; // Store the MIDI blob for playback
 
             // 3. Update UI / Trigger Download
             if (isDownloadOnly) {
                 triggerDownload(generationResult.midiBlob, generationResult.finalFileName);
                 statusDiv.textContent = `MIDI file "${generationResult.finalFileName}" download initiated.`;
-                statusDiv.classList.replace('text-gray-600', 'text-green-600');
-                // Optionally draw the preview even on download-only if desired
-                // pianoRollDrawer.draw(generationResult.notesForPianoRoll);
+                statusDiv.classList.replace('text-muted', 'text-success'); // Bootstrap's text-success for success
             } else {
                 pianoRollDrawer.draw(generationResult.notesForPianoRoll);
                 statusDiv.textContent = `Preview generated.`;
-                statusDiv.classList.replace('text-gray-600', 'text-green-600');
+                statusDiv.classList.replace('text-muted', 'text-success'); // Bootstrap's text-success for success
             }
 
         } catch (error: any) {
             console.error(`Error during MIDI generation (${actionText}):`, error);
             lastGeneratedResult = null; // Clear last result on error
+            lastGeneratedNotes = []; // Clear notes on error
+            lastGeneratedMidiBlob = null; // Clear MIDI blob on error
             statusDiv.textContent = `Error: ${error.message || 'Failed to generate MIDI.'}`;
-            statusDiv.classList.replace('text-gray-600', 'text-red-600');
+            statusDiv.classList.replace('text-muted', 'text-danger'); // Bootstrap's text-danger for errors
             pianoRollDrawer.drawErrorMessage("Error generating preview"); // Use drawer's error display
         }
     };

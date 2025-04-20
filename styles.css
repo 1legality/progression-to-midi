@@ -5,39 +5,38 @@ body {
 
 /* Add some basic styling for the canvas */
 #pianoRollCanvas {
-    border: 1px solid #d1d5db; /* gray-300 */
-    background-color: #f9fafb; /* gray-50 */
-    border-radius: 0.375rem; /* rounded-md */
+    border: 1px solid #dee2e6; /* Bootstrap's border color */
+    background-color: #f8f9fa; /* Bootstrap's light background */
+    border-radius: 0.375rem; /* Rounded corners */
     cursor: default;
-    max-width: 100%; /* Ensure it fits container */
-    height: 300px; /* Default height, adjust as needed */
-    display: block; /* Make it block to manage margins */
-    margin-top: 1.5rem; /* Add space above */
+    height: 300px; /* Default height */
+    display: block;
+    margin-top: 1.5rem;
 }
 
 /* Style for the download link container */
 #downloadLinkContainer {
-    margin-top: 1rem; /* Space above the link */
+    margin-top: 1rem;
     text-align: center;
 }
 
 #downloadLinkContainer a {
-    display: inline-block; /* Allow padding and centering */
+    display: inline-block;
     padding: 0.5rem 1rem;
-    background-color: #10b981; /* emerald-500 */
+    background-color: #198754; /* Bootstrap's success color */
     color: white;
-    border-radius: 0.375rem; /* rounded-md */
+    border-radius: 0.375rem;
     text-decoration: none;
-    font-weight: 500; /* medium */
+    font-weight: 500;
     transition: background-color 0.2s;
 }
 
 #downloadLinkContainer a:hover {
-    background-color: #059669; /* emerald-600 */
+    background-color: #157347; /* Darker success color */
 }
 
 #downloadLinkContainer a[disabled] {
-    background-color: #9ca3af; /* gray-400 */
+    background-color: #6c757d; /* Bootstrap's secondary color */
     cursor: not-allowed;
-    pointer-events: none; /* Prevent clicks */
+    pointer-events: none;
 }
