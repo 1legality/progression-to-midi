@@ -36,7 +36,7 @@ const INTERVALS = {
     m13: 20,
     M13: 21
 };
-const CHORD_FORMULAS: Record<string, number[]> = {
+export const CHORD_FORMULAS: Record<string, number[]> = {
     // --- Basic Triads ---
     '': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5], // Default to major
     'maj': [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5],

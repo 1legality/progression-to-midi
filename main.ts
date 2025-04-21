@@ -2,6 +2,7 @@
 import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult } from './MidiGenerator';
 import { PianoRollDrawer } from './PianoRollDrawer';
 import { SynthChordPlayer, ActiveNote } from './SynthChordPlayer';
+import { ChordInfoModal } from './ChordInfoModal';
 
 // Keep NoteData interface accessible if needed by main.ts directly
 interface NoteData {
@@ -243,6 +244,15 @@ function setupApp() {
     statusDiv.textContent = "Enter a progression and click generate.";
     pianoRollDrawer.draw([]); // Draw empty initial state
 
+    const helpButton = document.getElementById('helpButton');
+    if (helpButton) {
+        helpButton.addEventListener('click', () => {
+            ChordInfoModal.injectModalIntoDOM();
+            // Ensure Bootstrap is imported or available globally
+            const modal = new (window as any).bootstrap.Modal(document.getElementById('chordInfoModal')!);
+            modal.show();
+        });
+    }
 }
 
 // --- Run Setup after DOM is loaded ---

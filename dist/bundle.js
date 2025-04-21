@@ -1990,12 +1990,54 @@
     }
   });
 
+  // ChordInfoModal.ts
+  var ChordInfoModal;
+  var init_ChordInfoModal = __esm({
+    "ChordInfoModal.ts"() {
+      "use strict";
+      init_MidiGenerator();
+      ChordInfoModal = class {
+        static generateModalHTML() {
+          const chordEntries = Object.entries(CHORD_FORMULAS);
+          let modalContent = '<div class="modal" id="chordInfoModal" tabindex="-1">';
+          modalContent += '<div class="modal-dialog modal-lg">';
+          modalContent += '<div class="modal-content">';
+          modalContent += '<div class="modal-header">';
+          modalContent += '<h5 class="modal-title">Known Chord Formulas</h5>';
+          modalContent += '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>';
+          modalContent += "</div>";
+          modalContent += '<div class="modal-body">';
+          modalContent += '<ul class="list-group">';
+          chordEntries.forEach(([chord, formula]) => {
+            modalContent += `<li class="list-group-item"><strong>${chord || "Major"}:</strong> ${formula.join(", ")}</li>`;
+          });
+          modalContent += "</ul>";
+          modalContent += "</div>";
+          modalContent += '<div class="modal-footer">';
+          modalContent += '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>';
+          modalContent += "</div>";
+          modalContent += "</div>";
+          modalContent += "</div>";
+          modalContent += "</div>";
+          return modalContent;
+        }
+        static injectModalIntoDOM() {
+          const modalHTML = this.generateModalHTML();
+          const modalContainer = document.createElement("div");
+          modalContainer.innerHTML = modalHTML;
+          document.body.appendChild(modalContainer);
+        }
+      };
+    }
+  });
+
   // main.ts
   var require_main = __commonJS({
     "main.ts"() {
       init_MidiGenerator();
       init_PianoRollDrawer();
       init_SynthChordPlayer();
+      init_ChordInfoModal();
       function triggerDownload(blob, filename) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -2180,6 +2222,14 @@
         });
         statusDiv.textContent = "Enter a progression and click generate.";
         pianoRollDrawer.draw([]);
+        const helpButton = document.getElementById("helpButton");
+        if (helpButton) {
+          helpButton.addEventListener("click", () => {
+            ChordInfoModal.injectModalIntoDOM();
+            const modal = new window.bootstrap.Modal(document.getElementById("chordInfoModal"));
+            modal.show();
+          });
+        }
       }
       if (document.readyState === "loading") {
         document.addEventListener("DOMContentLoaded", setupApp);
