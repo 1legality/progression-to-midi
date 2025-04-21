@@ -95,10 +95,11 @@ function setupApp() {
         const normalizedProgression = progression
             .replace(/\|/g, ' ') // Replace pipes with spaces
             .replace(/->/g, ' ') // Replace arrows with spaces
+            .replace(/\s*-\s*/g, ' ') // Treat hyphens as separators for chords
             .replace(/\s+/g, ' ') // Normalize multiple spaces
             .trim();
 
-        const chords = normalizedProgression.split(' ');
+        const chords = normalizedProgression.split(/\s+/); // Split by spaces
         for (const chord of chords) {
             if (!validChordPattern.test(chord)) {
                 throw new Error(`Invalid chord detected: "${chord}". Please enter valid chords only.`);

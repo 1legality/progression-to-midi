@@ -2100,8 +2100,8 @@
         }
         const validChordPattern = generateValidChordPattern();
         function validateChordProgression(progression) {
-          const normalizedProgression = progression.replace(/\|/g, " ").replace(/->/g, " ").replace(/\s+/g, " ").trim();
-          const chords = normalizedProgression.split(" ");
+          const normalizedProgression = progression.replace(/\|/g, " ").replace(/->/g, " ").replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
+          const chords = normalizedProgression.split(/\s+/);
           for (const chord of chords) {
             if (!validChordPattern.test(chord)) {
               throw new Error(`Invalid chord detected: "${chord}". Please enter valid chords only.`);
