@@ -1077,7 +1077,7 @@
     "MidiGenerator.ts"() {
       "use strict";
       import_midi_writer_js = __toESM(require_build());
-      NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      NOTES = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"];
       INTERVALS = {
         P1: 0,
         m2: 1,
@@ -2093,6 +2093,22 @@
             }, 2e3);
           }
         };
+        function generateValidChordPattern() {
+          const chordQualities = Object.keys(CHORD_FORMULAS).join("|").replace(/\+/g, "\\+");
+          const notePattern = NOTES.join("|");
+          return new RegExp(`^(${notePattern})(?:${chordQualities})?(?:\\([^)]+\\))?$`);
+        }
+        const validChordPattern = generateValidChordPattern();
+        function validateChordProgression(progression) {
+          const normalizedProgression = progression.replace(/\|/g, " ").replace(/->/g, " ").replace(/\s+/g, " ").trim();
+          const chords = normalizedProgression.split(" ");
+          for (const chord of chords) {
+            if (!validChordPattern.test(chord)) {
+              throw new Error(`Invalid chord detected: "${chord}". Please enter valid chords only.`);
+            }
+          }
+          return normalizedProgression;
+        }
         const handleGeneration = (isDownloadOnly) => {
           const actionText = isDownloadOnly ? "Generating MIDI file" : "Generating preview and MIDI";
           statusDiv.textContent = `${actionText}...`;
@@ -2100,8 +2116,10 @@
           statusDiv.classList.add("text-muted");
           try {
             const formData = new FormData(form);
+            const rawProgression = formData.get("progression");
+            const validatedProgression = validateChordProgression(rawProgression);
             const options = {
-              progressionString: formData.get("progression"),
+              progressionString: validatedProgression,
               outputFileName: formData.get("outputFileName") || void 0,
               // Let generator handle default
               addBassNote: formData.has("addBassNote"),
@@ -2121,7 +2139,7 @@
             const chordDetails = generationResult.chordDetails;
             console.log("Chord Details:", chordDetails);
             lastGeneratedMidiBlob = generationResult.midiBlob;
-            const progressionChords = options.progressionString.split(" ");
+            const progressionChords = validatedProgression.split(" ");
             pianoRollDrawer.renderChordButtons(progressionChords, chordDetails);
             if (isDownloadOnly) {
               triggerDownload(generationResult.midiBlob, generationResult.finalFileName);

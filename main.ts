@@ -1,5 +1,5 @@
 // main.ts
-import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult } from './MidiGenerator';
+import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult, CHORD_FORMULAS, NOTES } from './MidiGenerator';
 import { PianoRollDrawer } from './PianoRollDrawer';
 import { SynthChordPlayer, ActiveNote } from './SynthChordPlayer';
 import { ChordInfoModal } from './ChordInfoModal';
@@ -83,6 +83,31 @@ function setupApp() {
         }
     };
 
+    function generateValidChordPattern(): RegExp {
+        const chordQualities = Object.keys(CHORD_FORMULAS).join('|').replace(/\+/g, '\\+');
+        const notePattern = NOTES.join('|');
+        return new RegExp(`^(${notePattern})(?:${chordQualities})?(?:\\([^)]+\\))?$`);
+    }
+
+    const validChordPattern = generateValidChordPattern();
+
+    function validateChordProgression(progression: string): string {
+        const normalizedProgression = progression
+            .replace(/\|/g, ' ') // Replace pipes with spaces
+            .replace(/->/g, ' ') // Replace arrows with spaces
+            .replace(/\s+/g, ' ') // Normalize multiple spaces
+            .trim();
+
+        const chords = normalizedProgression.split(' ');
+        for (const chord of chords) {
+            if (!validChordPattern.test(chord)) {
+                throw new Error(`Invalid chord detected: "${chord}". Please enter valid chords only.`);
+            }
+        }
+
+        return normalizedProgression;
+    }
+
     // --- Common function to get options and generate MIDI ---
     const handleGeneration = (isDownloadOnly: boolean): void => {
         const actionText = isDownloadOnly ? "Generating MIDI file" : "Generating preview and MIDI";
@@ -93,8 +118,11 @@ function setupApp() {
         try {
             // 1. Get form data
             const formData = new FormData(form);
+            const rawProgression = formData.get('progression') as string;
+            const validatedProgression = validateChordProgression(rawProgression);
+
             const options: MidiGenerationOptions = {
-                progressionString: formData.get('progression') as string,
+                progressionString: validatedProgression,
                 outputFileName: formData.get('outputFileName') as string || undefined, // Let generator handle default
                 addBassNote: formData.has('addBassNote'),
                 inversionType: formData.get('inversionType') as 'none' | 'first' | 'smooth',
@@ -119,7 +147,7 @@ function setupApp() {
             lastGeneratedMidiBlob = generationResult.midiBlob; // Store the MIDI blob for playback
 
             // Render chord buttons for the entire progression
-            const progressionChords = options.progressionString.split(' ');
+            const progressionChords = validatedProgression.split(' ');
             pianoRollDrawer.renderChordButtons(progressionChords, chordDetails);
 
             // 3. Update UI / Trigger Download

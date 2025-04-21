@@ -10,8 +10,8 @@ interface NoteData {
 }
 
 // --- Constants (can be private static or module-level) ---
-const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const INTERVALS = {
+export const NOTES = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B'];
+export const INTERVALS = {
     P1: 0,
     m2: 1,
     M2: 2,
