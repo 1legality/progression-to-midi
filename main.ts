@@ -1,5 +1,5 @@
 // main.ts
-import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult, CHORD_FORMULAS, NOTES } from './MidiGenerator';
+import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult, CHORD_FORMULAS, NOTES, OutputType } from './MidiGenerator';
 import { PianoRollDrawer } from './PianoRollDrawer';
 import { SynthChordPlayer, ActiveNote } from './SynthChordPlayer';
 import { ChordInfoModal } from './ChordInfoModal';
@@ -125,7 +125,7 @@ function setupApp() {
             const options: MidiGenerationOptions = {
                 progressionString: validatedProgression,
                 outputFileName: formData.get('outputFileName') as string || undefined, // Let generator handle default
-                addBassNote: formData.has('addBassNote'),
+                outputType: formData.get('outputType') as OutputType,
                 inversionType: formData.get('inversionType') as 'none' | 'first' | 'smooth',
                 baseOctave: parseInt(formData.get('baseOctave') as string, 10),
                 chordDurationStr: formData.get('chordDuration') as string,

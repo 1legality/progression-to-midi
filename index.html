@@ -73,9 +73,22 @@
                             class="form-range">
                     </div>
 
-                    <div class="form-check mb-3">
-                        <input id="addBassNote" name="addBassNote" type="checkbox" class="form-check-input">
-                        <label for="addBassNote" class="form-check-label">Add Bass Note (Root -1 Octave)</label>
+                    <div class="mb-3">
+                        <label class="form-label">Output Type:</label>
+                        <div class="d-flex flex-column flex-sm-row gap-3">
+                            <div class="form-check">
+                                <input id="outputChordsOnly" name="outputType" type="radio" value="chordsOnly" class="form-check-input" checked>
+                                <label for="outputChordsOnly" class="form-check-label">Chords Only</label>
+                            </div>
+                            <div class="form-check">
+                                <input id="outputChordsAndBass" name="outputType" type="radio" value="chordsAndBass" class="form-check-input">
+                                <label for="outputChordsAndBass" class="form-check-label">Chords + Bass</label>
+                            </div>
+                            <div class="form-check">
+                                <input id="outputBassOnly" name="outputType" type="radio" value="bassOnly" class="form-check-input">
+                                <label for="outputBassOnly" class="form-check-label">Bass Only</label>
+                            </div>
+                        </div>
                     </div>
 
                     <div class="mb-3">

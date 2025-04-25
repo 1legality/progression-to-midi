@@ -151,10 +151,13 @@ export const CHORD_FORMULAS: Record<string, number[]> = {
 const TPQN = 128; // MIDI Writer JS default ticks per quarter note
 const OCTAVE_ADJUSTMENT_THRESHOLD = 6; // Adjust if average pitch is > 6 semitones (half octave) away from target
 
+// Define the possible output types
+export type OutputType = 'chordsOnly' | 'chordsAndBass' | 'bassOnly';
+
 export interface MidiGenerationOptions {
     progressionString: string;
     outputFileName?: string; // Optional, provide default
-    addBassNote: boolean;
+    outputType: OutputType; // New option
     inversionType: 'none' | 'first' | 'smooth';
     baseOctave: number;
     chordDurationStr: string;
@@ -178,6 +181,7 @@ interface ChordGenerationData {
     adjustedVoicing: number[]; // Voicing after octave adjustment
     rootNoteName: string;
     isValid: boolean;
+    calculatedBassNote: number | null; // Store the calculated bass note
 }
 
 export class MidiGenerator {
@@ -327,6 +331,61 @@ export class MidiGenerator {
     }
 
     /**
+     * Calculates the appropriate bass note MIDI value for a given chord.
+     * @param chordData - The data for the current chord.
+     * @param baseOctave - The target base octave.
+     * @param inversionType - The type of inversion used for the chord voicing.
+     * @returns The MIDI note number for the bass note, or null if none could be determined.
+     */
+    private calculateBassNote(chordData: ChordGenerationData, baseOctave: number, inversionType: 'none' | 'first' | 'smooth'): number | null {
+        if (!chordData.isValid || !chordData.rootNoteName) {
+            return null;
+        }
+
+        const minNoteInVoicing = chordData.adjustedVoicing.length > 0 ? Math.min(...chordData.adjustedVoicing) : this.getMidiNote('C', baseOctave); // Fallback if voicing is empty
+        let chosenBassNoteMidi: number | null = null;
+
+        if (inversionType === 'smooth' && chordData.adjustedVoicing.length > 0) {
+            // Try to find the root note below the current voicing, prioritizing closer ones
+            const potentialBassNotes: { note: number; distance: number }[] = [];
+            for (let octave = baseOctave; octave >= 0; octave--) {
+                const potentialBass = this.getMidiNote(chordData.rootNoteName, octave);
+                if (potentialBass < minNoteInVoicing && potentialBass >= 0) {
+                    potentialBassNotes.push({ note: potentialBass, distance: minNoteInVoicing - potentialBass });
+                } else if (potentialBass < 0) {
+                    break; // Stop searching lower octaves
+                }
+            }
+
+            if (potentialBassNotes.length > 0) {
+                potentialBassNotes.sort((a, b) => a.distance - b.distance); // Closest first
+                chosenBassNoteMidi = potentialBassNotes[0].note;
+            } else {
+                // Fallback: If no root note is below, try one octave below baseOctave
+                const fallbackBass = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
+                if (fallbackBass >= 0 && fallbackBass <= 127) { // Check validity
+                    chosenBassNoteMidi = fallbackBass;
+                }
+            }
+        } else {
+            // For 'none' or 'first' inversion, or if smooth voicing is empty, use standard bass note (root, octave below base)
+            const standardBassNote = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
+            if (standardBassNote >= 0 && standardBassNote <= 127) { // Check validity
+                chosenBassNoteMidi = standardBassNote;
+            }
+        }
+
+        // Final check: ensure bass note is valid MIDI range
+        if (chosenBassNoteMidi !== null && (chosenBassNoteMidi < 0 || chosenBassNoteMidi > 127)) {
+            console.warn(`Calculated bass note ${chosenBassNoteMidi} for ${chordData.symbol} is out of range. Discarding.`);
+            return null;
+        }
+
+        return chosenBassNoteMidi;
+    }
+
+
+    /**
      * Generates MIDI data and note array from provided options.
      * @param options - The settings for MIDI generation.
      * @returns Object containing notesForPianoRoll, midiBlob, and finalFileName, or throws an error.
@@ -335,7 +394,7 @@ export class MidiGenerator {
         const {
             progressionString,
             outputFileName = 'progression',
-            addBassNote,
+            outputType,
             inversionType,
             baseOctave,
             chordDurationStr,
@@ -367,7 +426,8 @@ export class MidiGenerator {
                 initialVoicing: [],
                 adjustedVoicing: [],
                 rootNoteName: '',
-                isValid: false
+                isValid: false,
+                calculatedBassNote: null // Initialize bass note
             };
 
             if (!match) {
@@ -408,20 +468,29 @@ export class MidiGenerator {
                     currentChordVoicing.sort((a, b) => a - b);
                 } else if (inversionType === 'smooth') {
                     if (!previousChordVoicing && currentChordVoicing.length > 1) {
+                        // Adjust the first chord towards the target octave
                         currentChordVoicing = this.adjustVoicingsToTargetOctave([currentChordVoicing], baseOctave)[0];
                     } else if (previousChordVoicing && currentChordVoicing.length > 1) {
                         const possibleInversions = this.generateInversions(rootPositionNotes);
-                        let bestVoicing = currentChordVoicing;
+                        let bestVoicing = currentChordVoicing; // Default to root position adjusted
                         let minDistance = Infinity;
+
+                        // Adjust the *target* (previous) voicing to the base octave for a fair comparison anchor
+                        const targetPreviousVoicing = this.adjustVoicingsToTargetOctave([previousChordVoicing], baseOctave)[0];
+
                         for (const inversion of possibleInversions) {
+                            // Adjust each potential inversion to the target octave before comparing
                             const adjustedInversion = this.adjustVoicingsToTargetOctave([inversion], baseOctave)[0];
-                            const distance = this.calculateVoicingDistance(previousChordVoicing, adjustedInversion);
+                            const distance = this.calculateVoicingDistance(targetPreviousVoicing, adjustedInversion);
                             if (distance < minDistance) {
                                 minDistance = distance;
-                                bestVoicing = adjustedInversion;
+                                bestVoicing = adjustedInversion; // This is the best voicing *in the target octave*
                             }
                         }
                         currentChordVoicing = bestVoicing;
+                    } else {
+                         // Handle single note chords or if previousChordVoicing is null after the first chord
+                         currentChordVoicing = this.adjustVoicingsToTargetOctave([currentChordVoicing], baseOctave)[0];
                     }
                 }
 
@@ -441,20 +510,24 @@ export class MidiGenerator {
 
 
         // --- Step 2: Apply Post-Processing Octave Adjustment (if not already done during 'smooth') ---
-        // Note: 'smooth' now adjusts during the smoothing process itself to compare like-with-like octaves.
+        // Note: 'smooth' now adjusts during the smoothing process itself.
         // We still need to adjust 'none' and 'first' inversions here.
         let finalVoicings: number[][];
         if (inversionType === 'none' || inversionType === 'first') {
             const initialVoicings = generatedChords.map(cd => cd.initialVoicing);
             finalVoicings = this.adjustVoicingsToTargetOctave(initialVoicings, baseOctave);
-        } else { // 'smooth' voicings are already adjusted relative to the previous chord
+        } else { // 'smooth' voicings are already adjusted relative to the previous chord during step 1
             finalVoicings = generatedChords.map(cd => cd.initialVoicing); // Use the already-adjusted initialVoicing
         }
 
-        // Store final voicings back into generatedChords
+        // Store final voicings back into generatedChords and calculate bass notes
         generatedChords.forEach((cd, index) => {
-            // Ensure the final voicing is sorted, especially after potential adjustments
+            // Ensure the final voicing is sorted
             cd.adjustedVoicing = (finalVoicings[index] || []).sort((a, b) => a - b);
+            // Calculate and store the bass note needed for Step 3
+            if (cd.isValid) {
+                cd.calculatedBassNote = this.calculateBassNote(cd, baseOctave, inversionType);
+            }
         });
 
 
@@ -465,51 +538,34 @@ export class MidiGenerator {
         const notesForPianoRoll: NoteData[] = [];
 
         for (const chordData of generatedChords) {
-            if (!chordData.isValid || chordData.adjustedVoicing.length === 0) {
-                // Add a rest if the chord is invalid or ended up with no notes
+            if (!chordData.isValid) {
+                // Add a rest if the chord symbol was invalid
                 track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + chordData.durationTicks, duration: 'T0', velocity: 0 }));
                 continue;
             }
 
-            let eventMidiNotes = [...chordData.adjustedVoicing]; // Start with the adjusted chord notes
+            let eventMidiNotes: number[] = [];
 
-            // --- Add Bass Note Logic ---
-            if (addBassNote) {
-                const minNoteInVoicing = Math.min(...eventMidiNotes);
-                let chosenBassNoteMidi: number | null = null;
-
-                if (inversionType === 'smooth') {
-                    const potentialBassNotes: { note: number; distance: number }[] = [];
-                    for (let octave = baseOctave; octave >= 0; octave--) {
-                        const potentialBass = this.getMidiNote(chordData.rootNoteName, octave);
-                        if (potentialBass < minNoteInVoicing && potentialBass >= 0) {
-                            potentialBassNotes.push({ note: potentialBass, distance: minNoteInVoicing - potentialBass });
-                        } else if (potentialBass < 0) {
-                            break;
-                        }
+            // Determine notes based on outputType
+            switch (outputType) {
+                case 'chordsOnly':
+                    eventMidiNotes = [...chordData.adjustedVoicing];
+                    break;
+                case 'chordsAndBass':
+                    eventMidiNotes = [...chordData.adjustedVoicing];
+                    if (chordData.calculatedBassNote !== null && !eventMidiNotes.includes(chordData.calculatedBassNote)) {
+                        eventMidiNotes.push(chordData.calculatedBassNote);
                     }
-
-                    if (potentialBassNotes.length > 0) {
-                        potentialBassNotes.sort((a, b) => a.distance - b.distance);
-                        chosenBassNoteMidi = potentialBassNotes[0].note;
+                    break;
+                case 'bassOnly':
+                    if (chordData.calculatedBassNote !== null) {
+                        eventMidiNotes = [chordData.calculatedBassNote];
                     } else {
-                        const fallbackBass = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
-                        if (fallbackBass >= 0 && fallbackBass <= 127 && fallbackBass < minNoteInVoicing) {
-                            chosenBassNoteMidi = fallbackBass;
-                        }
+                        eventMidiNotes = []; // No valid bass note found
+                        console.warn(`No valid bass note could be determined for "${chordData.symbol}". Adding rest.`);
                     }
-                } else {
-                    const standardBassNote = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
-                    if (standardBassNote >= 0 && standardBassNote <= 127) {
-                        chosenBassNoteMidi = standardBassNote;
-                    }
-                }
-
-                if (chosenBassNoteMidi !== null && !eventMidiNotes.includes(chosenBassNoteMidi)) {
-                    eventMidiNotes.push(chosenBassNoteMidi);
-                }
-            } // --- End Add Bass Note Logic ---
-
+                    break;
+            }
 
             // Final filtering and sorting: ensure all notes are within MIDI range 0-127 and remove duplicates
             eventMidiNotes = eventMidiNotes
@@ -534,8 +590,10 @@ export class MidiGenerator {
                     velocity: velocity
                 }));
             } else {
-                // Add a rest if filtering removed all notes
-                console.warn(`No valid MIDI notes remained for chord "${chordData.symbol}" after final filtering. Adding rest.`);
+                // Add a rest if filtering removed all notes or if bassOnly had no note
+                if (outputType !== 'bassOnly') { // Only warn if chords were expected
+                     console.warn(`No valid MIDI notes remained for chord "${chordData.symbol}" after final filtering. Adding rest.`);
+                }
                 track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + chordData.durationTicks, duration: 'T0', velocity: 0 }));
             }
         } // End Step 3 loop
