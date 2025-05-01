@@ -1423,35 +1423,54 @@
           });
         }
         /**
-         * Calculates the appropriate bass note MIDI value for a given chord, prioritizing smooth transitions.
+         * Calculates the appropriate bass note MIDI value for a given chord, prioritizing smooth transitions
+         * and ensuring it's distinct from the main chord voicing when necessary.
          * @param chordData - The data for the current chord.
-         * @param baseOctave - The target base octave.
+         * @param baseOctave - The target base octave for the *chords*.
          * @param inversionType - The type of inversion used for the chord voicing.
          * @param previousBassNote - The MIDI value of the previous bass note, if available.
+         * @param outputType - The requested output type.
+         * @param chordVoicing - The actual MIDI notes of the chord's adjusted voicing.
          * @returns The MIDI note number for the bass note, or null if none could be determined.
          */
-        calculateBassNote(chordData, baseOctave, inversionType, previousBassNote, outputType) {
+        calculateBassNote(chordData, baseOctave, inversionType, previousBassNote, outputType, chordVoicing) {
           if (!chordData.isValid || !chordData.rootNoteName) {
             return null;
           }
-          const rootMidi = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
-          let chosenBassNote = rootMidi;
-          if (inversionType === "smooth" && previousBassNote !== null && outputType === "bassOnly") {
+          if (inversionType === "smooth" && previousBassNote !== null) {
             const potentialBassNotes = [];
-            for (let octave = baseOctave - 2; octave <= baseOctave; octave++) {
+            const prevOctave = Math.floor((previousBassNote - 12) / 12);
+            for (let octave = prevOctave - 1; octave <= prevOctave + 1; octave++) {
               const bassNote = this.getMidiNote(chordData.rootNoteName, octave);
               if (bassNote >= 0 && bassNote <= 127) {
                 potentialBassNotes.push(bassNote);
               }
             }
             if (potentialBassNotes.length > 0) {
-              chosenBassNote = potentialBassNotes.reduce(
+              const chosenBassNote2 = potentialBassNotes.reduce(
                 (closest, note) => Math.abs(note - previousBassNote) < Math.abs(closest - previousBassNote) ? note : closest
               );
+              if (chosenBassNote2 >= 0 && chosenBassNote2 <= 127) {
+                return chosenBassNote2;
+              }
+            }
+          }
+          const defaultBassOctave = baseOctave - 1;
+          let chosenBassNote = this.getMidiNote(chordData.rootNoteName, defaultBassOctave);
+          if (chordVoicing.length > 0 && chordVoicing.includes(chosenBassNote)) {
+            const lowerBassNote = this.getMidiNote(chordData.rootNoteName, defaultBassOctave - 1);
+            if (lowerBassNote >= 0 && lowerBassNote <= 127 && lowerBassNote !== chosenBassNote) {
+              chosenBassNote = lowerBassNote;
+            } else {
             }
           }
           if (chosenBassNote < 0 || chosenBassNote > 127) {
-            console.warn(`Calculated bass note ${chosenBassNote} for "${chordData.symbol}" is out of range.`);
+            console.warn(`Calculated bass note ${chosenBassNote} for "${chordData.symbol}" is out of range. Trying higher octave.`);
+            const higherBassNote = this.getMidiNote(chordData.rootNoteName, defaultBassOctave + 1);
+            if (higherBassNote >= 0 && higherBassNote <= 127 && !chordVoicing.includes(higherBassNote)) {
+              return higherBassNote;
+            }
+            console.error(`Could not determine a valid bass note for "${chordData.symbol}".`);
             return null;
           }
           return chosenBassNote;
@@ -1568,7 +1587,15 @@
           generatedChords.forEach((cd, index) => {
             cd.adjustedVoicing = (finalVoicings[index] || []).sort((a, b) => a - b);
             if (cd.isValid) {
-              cd.calculatedBassNote = this.calculateBassNote(cd, baseOctave, inversionType, previousBassNote, outputType);
+              cd.calculatedBassNote = this.calculateBassNote(
+                cd,
+                baseOctave,
+                inversionType,
+                previousBassNote,
+                outputType,
+                cd.adjustedVoicing
+                // <-- Pass the adjusted voicing here
+              );
               previousBassNote = cd.calculatedBassNote;
             }
           });
