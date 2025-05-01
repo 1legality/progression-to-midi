@@ -1423,13 +1423,13 @@
          * @param previousBassNote - The MIDI value of the previous bass note, if available.
          * @returns The MIDI note number for the bass note, or null if none could be determined.
          */
-        calculateBassNote(chordData, baseOctave, inversionType, previousBassNote) {
+        calculateBassNote(chordData, baseOctave, inversionType, previousBassNote, outputType) {
           if (!chordData.isValid || !chordData.rootNoteName) {
             return null;
           }
           const rootMidi = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
           let chosenBassNote = rootMidi;
-          if (inversionType === "smooth" && previousBassNote !== null) {
+          if (inversionType === "smooth" && previousBassNote !== null && outputType === "bassOnly") {
             const potentialBassNotes = [];
             for (let octave = baseOctave - 2; octave <= baseOctave; octave++) {
               const bassNote = this.getMidiNote(chordData.rootNoteName, octave);
@@ -1561,7 +1561,7 @@
           generatedChords.forEach((cd, index) => {
             cd.adjustedVoicing = (finalVoicings[index] || []).sort((a, b) => a - b);
             if (cd.isValid) {
-              cd.calculatedBassNote = this.calculateBassNote(cd, baseOctave, inversionType, previousBassNote);
+              cd.calculatedBassNote = this.calculateBassNote(cd, baseOctave, inversionType, previousBassNote, outputType);
               previousBassNote = cd.calculatedBassNote;
             }
           });

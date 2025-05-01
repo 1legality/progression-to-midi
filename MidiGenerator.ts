@@ -342,7 +342,8 @@ export class MidiGenerator {
         chordData: ChordGenerationData,
         baseOctave: number,
         inversionType: 'none' | 'first' | 'smooth',
-        previousBassNote: number | null
+        previousBassNote: number | null,
+        outputType: OutputType
     ): number | null {
         if (!chordData.isValid || !chordData.rootNoteName) {
             return null;
@@ -351,7 +352,7 @@ export class MidiGenerator {
         const rootMidi = this.getMidiNote(chordData.rootNoteName, baseOctave - 1);
         let chosenBassNote = rootMidi;
 
-        if (inversionType === 'smooth' && previousBassNote !== null) {
+        if (inversionType === 'smooth' && previousBassNote !== null && outputType === 'bassOnly') {
             // Find the closest bass note to the previous one
             const potentialBassNotes = [];
             for (let octave = baseOctave - 2; octave <= baseOctave; octave++) {
@@ -520,7 +521,7 @@ export class MidiGenerator {
             cd.adjustedVoicing = (finalVoicings[index] || []).sort((a, b) => a - b);
             // Calculate and store the bass note needed for Step 3
             if (cd.isValid) {
-                cd.calculatedBassNote = this.calculateBassNote(cd, baseOctave, inversionType, previousBassNote);
+                cd.calculatedBassNote = this.calculateBassNote(cd, baseOctave, inversionType, previousBassNote, outputType);
                 previousBassNote = cd.calculatedBassNote; // Update previous bass note
             }
         });
