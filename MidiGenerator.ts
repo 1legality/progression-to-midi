@@ -10,7 +10,7 @@ interface NoteData {
 }
 
 // --- Constants (can be private static or module-level) ---
-export const NOTES = ['C', 'C#', 'Db', 'D', 'D#', 'Eb', 'E', 'F', 'F#', 'Gb', 'G', 'G#', 'Ab', 'A', 'A#', 'Bb', 'B'];
+export const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 export const INTERVALS = {
     P1: 0,
     m2: 1,
@@ -195,10 +195,24 @@ export class MidiGenerator {
     }
 
     private getNoteIndex(note: string): number {
-        const normalizedNote = this.normalizeNoteName(note);
-        const index = NOTES.indexOf(normalizedNote);
-        if (index === -1) throw new Error(`Invalid note name: ${note}`);
-        return index;
+    // Normalize flats to sharps first (Db -> C#, Gb -> F#, etc.)
+    const normalizedNote = this.normalizeNoteName(note);
+    // Find the index in the CORRECTED 12-tone array
+    const index = NOTES.indexOf(normalizedNote);
+    if (index === -1) {
+         // Handle cases like E# (-> F) or B# (-> C) which might fail after normalization if not careful
+         // A more robust approach might be a direct map:
+         // throw new Error(`Invalid or unhandled note name after normalization: ${normalizedNote} (from ${note})`);
+         // Let's try re-normalizing for edge cases like B#:
+         const reNormalized = this.normalizeNoteName(normalizedNote); // e.g., B# -> C
+         const reIndex = NOTES.indexOf(reNormalized);
+         if (reIndex === -1) {
+             throw new Error(`Invalid note name: ${note} -> ${normalizedNote} -> ${reNormalized}`);
+         }
+         return reIndex;
+
+    }
+    return index;
     }
 
     private getMidiNote(noteName: string, octave: number): number {

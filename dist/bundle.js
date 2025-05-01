@@ -1077,7 +1077,7 @@
     "MidiGenerator.ts"() {
       "use strict";
       import_midi_writer_js = __toESM(require_build());
-      NOTES = ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"];
+      NOTES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
       INTERVALS = {
         P1: 0,
         m2: 1,
@@ -1296,7 +1296,14 @@
         getNoteIndex(note) {
           const normalizedNote = this.normalizeNoteName(note);
           const index = NOTES.indexOf(normalizedNote);
-          if (index === -1) throw new Error(`Invalid note name: ${note}`);
+          if (index === -1) {
+            const reNormalized = this.normalizeNoteName(normalizedNote);
+            const reIndex = NOTES.indexOf(reNormalized);
+            if (reIndex === -1) {
+              throw new Error(`Invalid note name: ${note} -> ${normalizedNote} -> ${reNormalized}`);
+            }
+            return reIndex;
+          }
           return index;
         }
         getMidiNote(noteName, octave) {
