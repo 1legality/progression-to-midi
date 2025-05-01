@@ -186,11 +186,20 @@ interface ChordGenerationData {
 
 export class MidiGenerator {
 
-    // --- Helper Functions (can be private methods) ---
     private normalizeNoteName(note: string): string {
         const name = note.toUpperCase();
         switch (name) {
-            case 'DB': return 'C#'; case 'EB': return 'D#'; case 'FB': return 'E'; case 'GB': return 'F#'; case 'AB': return 'G#'; case 'BB': return 'A#'; case 'E#': return 'F'; case 'B#': return 'C'; default: return name;
+            // Flats are converted to sharps here!
+            case 'DB': return 'C#';
+            case 'EB': return 'D#';
+            case 'FB': return 'E'; // Special case
+            case 'GB': return 'F#';
+            case 'AB': return 'G#';
+            case 'BB': return 'A#';
+            // Sharps that wrap around
+            case 'E#': return 'F';
+            case 'B#': return 'C';
+            default: return name; // Natural notes or already sharp notes pass through
         }
     }
 

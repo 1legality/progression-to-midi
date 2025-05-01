@@ -1269,22 +1269,24 @@
       TPQN = 128;
       OCTAVE_ADJUSTMENT_THRESHOLD = 6;
       MidiGenerator = class {
-        // --- Helper Functions (can be private methods) ---
         normalizeNoteName(note) {
           const name = note.toUpperCase();
           switch (name) {
+            // Flats are converted to sharps here!
             case "DB":
               return "C#";
             case "EB":
               return "D#";
             case "FB":
               return "E";
+            // Special case
             case "GB":
               return "F#";
             case "AB":
               return "G#";
             case "BB":
               return "A#";
+            // Sharps that wrap around
             case "E#":
               return "F";
             case "B#":
@@ -2160,18 +2162,44 @@
             }, 2e3);
           }
         };
+        const ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION = [
+          "C",
+          "C#",
+          "Db",
+          "D",
+          "D#",
+          "Eb",
+          "E",
+          "Fb",
+          // E flat is Eb, F flat is E
+          "F",
+          "F#",
+          "Gb",
+          "G",
+          "G#",
+          "Ab",
+          "A",
+          "A#",
+          "Bb",
+          "B",
+          "Cb"
+          // C flat is B
+          // We don't strictly need E# or B# here as users rarely input them,
+          // and MidiGenerator normalizes them anyway if they somehow get through.
+        ];
         function generateValidChordPattern() {
-          const chordQualities = Object.keys(CHORD_FORMULAS).join("|").replace(/\+/g, "\\+");
-          const notePattern = NOTES.join("|");
-          return new RegExp(`^(${notePattern})(?:${chordQualities})?(?:\\([^)]+\\))?$`);
+          const notePattern = ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION.join("|");
+          const qualitiesPattern = Object.keys(CHORD_FORMULAS).filter((q) => q).map((q) => q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length).join("|");
+          return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?$`, "i");
         }
-        const validChordPattern = generateValidChordPattern();
         function validateChordProgression(progression) {
           const normalizedProgression = progression.replace(/\|/g, " ").replace(/->/g, " ").replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
           const chords = normalizedProgression.split(/\s+/);
+          const validChordPattern = generateValidChordPattern();
           for (const chord of chords) {
+            if (!chord) continue;
             if (!validChordPattern.test(chord)) {
-              throw new Error(`Invalid chord detected: "${chord}". Please enter valid chords only.`);
+              throw new Error(`Invalid chord format or unknown quality detected: "${chord}". Please use formats like C, Cm, G7, Bbmaj7.`);
             }
           }
           return normalizedProgression;

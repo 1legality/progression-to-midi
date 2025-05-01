@@ -83,13 +83,38 @@ function setupApp() {
         }
     };
 
-    function generateValidChordPattern(): RegExp {
-        const chordQualities = Object.keys(CHORD_FORMULAS).join('|').replace(/\+/g, '\\+');
-        const notePattern = NOTES.join('|');
-        return new RegExp(`^(${notePattern})(?:${chordQualities})?(?:\\([^)]+\\))?$`);
-    }
+    // Define a more inclusive list of possible note names for validation ONLY
+    // This allows users to input flats, while MidiGenerator handles internal normalization.
+    const ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION = [
+        'C', 'C#', 'Db',
+        'D', 'D#', 'Eb',
+        'E', 'Fb', // E flat is Eb, F flat is E
+        'F', 'F#', 'Gb',
+        'G', 'G#', 'Ab',
+        'A', 'A#', 'Bb',
+        'B', 'Cb'  // C flat is B
+        // We don't strictly need E# or B# here as users rarely input them,
+        // and MidiGenerator normalizes them anyway if they somehow get through.
+    ];
 
-    const validChordPattern = generateValidChordPattern();
+    function generateValidChordPattern(): RegExp {
+        // Use the inclusive list for the root note pattern
+        const notePattern = ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION
+            .join('|');
+
+        // Get qualities, escape special regex chars, sort by length descending
+        const qualitiesPattern = Object.keys(CHORD_FORMULAS)
+            .filter(q => q) // Exclude the empty string quality ('') used for plain major
+            .map(q => q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) // Escape special chars like +, (, )
+            .sort((a, b) => b.length - a.length) // IMPORTANT: Match longer qualities first (e.g., maj7 before maj)
+            .join('|');
+
+        // Final Regex: Root note followed by an optional known quality string.
+        // Allows "C", "Cm", "G7", "Bbmaj7", "Dbdim", etc.
+        // It relies on the chord parser in MidiGenerator to handle the actual interpretation.
+        // Added 'i' flag for case-insensitive matching (e.g., bbmaj7 works)
+        return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?$`, 'i');
+    }
 
     function validateChordProgression(progression: string): string {
         const normalizedProgression = progression
@@ -100,9 +125,17 @@ function setupApp() {
             .trim();
 
         const chords = normalizedProgression.split(/\s+/); // Split by spaces
+        const validChordPattern = generateValidChordPattern(); // Generate the updated pattern
+
         for (const chord of chords) {
+            if (!chord) continue; // Skip empty strings if multiple spaces occurred
+
+            // Test against the more flexible pattern
             if (!validChordPattern.test(chord)) {
-                throw new Error(`Invalid chord detected: "${chord}". Please enter valid chords only.`);
+                // You could potentially add more specific checks here if needed,
+                // but this error message covers most cases where the format is wrong
+                // or the quality isn't in CHORD_FORMULAS.
+                throw new Error(`Invalid chord format or unknown quality detected: "${chord}". Please use formats like C, Cm, G7, Bbmaj7.`);
             }
         }
 
