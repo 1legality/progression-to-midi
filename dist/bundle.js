@@ -1568,6 +1568,28 @@
                 } else {
                   currentChordVoicing = this.adjustVoicingsToTargetOctave([currentChordVoicing], baseOctave)[0];
                 }
+              } else if (inversionType === "pianist") {
+                const root = currentChordVoicing[0];
+                const topVoices = currentChordVoicing.slice(1);
+                const SPREAD_BASE = 7;
+                if (previousChordVoicing && topVoices.length > 1) {
+                  const possibleVoicings = this.generateInversions(topVoices);
+                  let bestTopVoicing = topVoices;
+                  let minDistance = Infinity;
+                  for (const inversion of possibleVoicings) {
+                    const spreadInversion = inversion.map((note, i) => note + SPREAD_BASE + i * 2);
+                    const testVoicing = [root, ...spreadInversion];
+                    const distance = this.calculateVoicingDistance(previousChordVoicing, testVoicing);
+                    if (distance < minDistance) {
+                      minDistance = distance;
+                      bestTopVoicing = spreadInversion;
+                    }
+                  }
+                  currentChordVoicing = [root, ...bestTopVoicing].sort((a, b) => a - b);
+                } else {
+                  const spreadTop = topVoices.map((note, i) => note + SPREAD_BASE + i * 2);
+                  currentChordVoicing = [root, ...spreadTop].sort((a, b) => a - b);
+                }
               }
               chordData.initialVoicing = [...currentChordVoicing];
               chordData.isValid = true;
@@ -2224,7 +2246,7 @@
               tempo: parseInt(formData.get("tempo"), 10),
               velocity: parseInt(formData.get("velocity"), 10)
             };
-            if (!["none", "first", "smooth"].includes(options.inversionType)) {
+            if (!["none", "first", "smooth", "pianist"].includes(options.inversionType)) {
               console.warn(`Invalid inversionType received: ${options.inversionType}. Defaulting to 'none'.`);
               options.inversionType = "none";
             }

@@ -158,7 +158,7 @@ export interface MidiGenerationOptions {
     progressionString: string;
     outputFileName?: string; // Optional, provide default
     outputType: OutputType; // New option
-    inversionType: 'none' | 'first' | 'smooth';
+    inversionType: 'none' | 'first' | 'smooth' | 'pianist';
     baseOctave: number;
     chordDurationStr: string;
     tempo: number;
@@ -367,7 +367,7 @@ export class MidiGenerator {
     private calculateBassNote(
         chordData: ChordGenerationData,
         baseOctave: number,
-        inversionType: 'none' | 'first' | 'smooth',
+        inversionType: 'none' | 'first' | 'smooth' | 'pianist',
         previousBassNote: number | null,
         outputType: OutputType,
         chordVoicing: number[] // Pass the actual chord voicing
@@ -539,6 +539,34 @@ export class MidiGenerator {
                     } else {
                          // Handle single note chords or if previousChordVoicing is null after the first chord
                          currentChordVoicing = this.adjustVoicingsToTargetOctave([currentChordVoicing], baseOctave)[0];
+                    }
+                } else if (inversionType === 'pianist') {
+                    // Pianist mode with basic voice anchoring
+                    const root = currentChordVoicing[0];
+                    const topVoices = currentChordVoicing.slice(1);
+                    const SPREAD_BASE = 7; // more natural sounding than 12
+
+                    if (previousChordVoicing && topVoices.length > 1) {
+                        // Generate inversions of top voices only
+                        const possibleVoicings = this.generateInversions(topVoices);
+                        let bestTopVoicing = topVoices;
+                        let minDistance = Infinity;
+
+                        for (const inversion of possibleVoicings) {
+                            const spreadInversion = inversion.map((note, i) => note + SPREAD_BASE + i * 2);
+                            const testVoicing = [root, ...spreadInversion];
+                            const distance = this.calculateVoicingDistance(previousChordVoicing, testVoicing);
+                            if (distance < minDistance) {
+                                minDistance = distance;
+                                bestTopVoicing = spreadInversion;
+                            }
+                        }
+                        currentChordVoicing = [root, ...bestTopVoicing].sort((a, b) => a - b);
+                    } 
+                    else 
+                    {
+                        const spreadTop = topVoices.map((note, i) => note + SPREAD_BASE + i * 2);
+                        currentChordVoicing = [root, ...spreadTop].sort((a, b) => a - b);
                     }
                 }
 
