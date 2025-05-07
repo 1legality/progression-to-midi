@@ -1488,6 +1488,7 @@
             outputFileName = "progression",
             outputType,
             inversionType,
+            voicingFlavor = "full",
             baseOctave,
             chordDurationStr,
             tempo,
@@ -1570,7 +1571,7 @@
                 }
               } else if (inversionType === "pianist") {
                 const root = currentChordVoicing[0];
-                const topVoices = currentChordVoicing.slice(1);
+                const topVoices = currentChordVoicing.slice(1).map((n) => n - 12);
                 const SPREAD_BASE = 7;
                 if (previousChordVoicing && topVoices.length > 1) {
                   const possibleVoicings = this.generateInversions(topVoices);
@@ -1608,8 +1609,11 @@
           } else {
             finalVoicings = generatedChords.map((cd) => cd.initialVoicing);
           }
+          const flavoredVoicings = finalVoicings.map(
+            (voicing) => this.applyVoicingFlavor(voicing, voicingFlavor, baseOctave)
+          );
           generatedChords.forEach((cd, index) => {
-            cd.adjustedVoicing = (finalVoicings[index] || []).sort((a, b) => a - b);
+            cd.adjustedVoicing = flavoredVoicings[index].sort((a, b) => a - b);
             if (cd.isValid) {
               cd.calculatedBassNote = this.calculateBassNote(
                 cd,
@@ -1679,6 +1683,31 @@
           const midiDataBytes = writer.buildFile();
           const midiBlob = new Blob([midiDataBytes], { type: "audio/midi" });
           return { notesForPianoRoll, midiBlob, finalFileName, chordDetails: generatedChords };
+        }
+        // Add helper method to apply voicing flavor
+        applyVoicingFlavor(voicing, flavor, baseOctave) {
+          let result = [...voicing];
+          switch (flavor) {
+            case "full":
+              break;
+            case "sparse":
+              result = [result[0], result[result.length - 1]];
+              break;
+            case "lofi":
+              result = [result[0]];
+              if (voicing.length > 1) result.push(voicing[1]);
+              break;
+            case "cinematic":
+              if (result.length > 4) result = result.filter((_, i) => i !== 2);
+              break;
+            case "chaotic":
+              result = result.map((n) => Math.min(127, Math.max(0, n + ((Math.random() - 0.5) * 4 | 0))));
+              break;
+            case "pad":
+              result = result.slice(0, Math.min(result.length, 4));
+              break;
+          }
+          return Array.from(new Set(result.map((n) => Math.min(127, Math.max(0, n))))).sort((a, b) => a - b);
         }
       };
     }
@@ -2244,7 +2273,8 @@
               baseOctave: parseInt(formData.get("baseOctave"), 10),
               chordDurationStr: formData.get("chordDuration"),
               tempo: parseInt(formData.get("tempo"), 10),
-              velocity: parseInt(formData.get("velocity"), 10)
+              velocity: parseInt(formData.get("velocity"), 10),
+              voicingFlavor: formData.get("voicingFlavor")
             };
             if (!["none", "first", "smooth", "pianist"].includes(options.inversionType)) {
               console.warn(`Invalid inversionType received: ${options.inversionType}. Defaulting to 'none'.`);

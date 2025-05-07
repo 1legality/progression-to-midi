@@ -78,7 +78,7 @@
                             <label for="outputType" class="form-label">Output Type:</label>
                             <select id="outputType" name="outputType" class="form-select">
                                 <option value="chordsOnly" selected>Chords Only</option>
-                                <option value="chordsAndBass" selected>Chords + Bass</option>
+                                <option value="chordsAndBass">Chords + Bass</option>
                                 <option value="bassOnly">Bass Only</option>
                             </select>
                         </div>
@@ -89,8 +89,22 @@
                                 <option value="none">None (Root Position)</option>
                                 <option value="first">1st Inversion</option>
                                 <option value="smooth" selected>Smooth Voice Leading</option>
-                                <option value="pianist" selected>Pianist</option>
+                                <option value="pianist">Pianist</option>
                             </select>
+                        </div>
+
+                        <!-- New Voicing Flavor Dimension -->
+                        <div class="mb-3">
+                            <label for="voicingFlavor" class="form-label">Voicing Flavor:</label>
+                            <select id="voicingFlavor" name="voicingFlavor" class="form-select">
+                                <option value="full" selected>Full</option>
+                                <option value="sparse">Sparse</option>
+                                <option value="lofi">Lo-Fi</option>
+                                <option value="cinematic">Cinematic</option>
+                                <option value="chaotic">Chaotic</option>
+                                <option value="pad">Pad</option>
+                            </select>
+                            <small class="text-muted">Choose a style to shape the chord density and spread.</small>
                         </div>
                     </div>
 

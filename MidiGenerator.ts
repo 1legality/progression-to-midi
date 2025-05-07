@@ -159,6 +159,7 @@ export interface MidiGenerationOptions {
     outputFileName?: string; // Optional, provide default
     outputType: OutputType; // New option
     inversionType: 'none' | 'first' | 'smooth' | 'pianist';
+    voicingFlavor?: 'full' | 'sparse' | 'lofi' | 'cinematic' | 'chaotic' | 'pad';
     baseOctave: number;
     chordDurationStr: string;
     tempo: number;
@@ -443,6 +444,7 @@ export class MidiGenerator {
             outputFileName = 'progression',
             outputType,
             inversionType,
+            voicingFlavor = 'full',
             baseOctave,
             chordDurationStr,
             tempo,
@@ -543,8 +545,8 @@ export class MidiGenerator {
                 } else if (inversionType === 'pianist') {
                     // Pianist mode with basic voice anchoring
                     const root = currentChordVoicing[0];
-                    const topVoices = currentChordVoicing.slice(1);
-                    const SPREAD_BASE = 7; // more natural sounding than 12
+                    const topVoices = currentChordVoicing.slice(1).map(n => n - 12);
+                    const SPREAD_BASE = 7;
 
                     if (previousChordVoicing && topVoices.length > 1) {
                         // Generate inversions of top voices only
@@ -596,10 +598,15 @@ export class MidiGenerator {
             finalVoicings = generatedChords.map(cd => cd.initialVoicing); // Use the already-adjusted initialVoicing
         }
 
+        // Apply voicing flavor modifier to each chord voicing
+        const flavoredVoicings = finalVoicings.map(voicing =>
+            this.applyVoicingFlavor(voicing, voicingFlavor, baseOctave)
+        );
+
         // Store final voicings back into generatedChords and calculate bass notes
         generatedChords.forEach((cd, index) => {
             // Ensure the final voicing is sorted
-            cd.adjustedVoicing = (finalVoicings[index] || []).sort((a, b) => a - b);
+            cd.adjustedVoicing = flavoredVoicings[index].sort((a, b) => a - b);
             // Calculate and store the bass note needed for Step 3
             if (cd.isValid) {
                 cd.calculatedBassNote = this.calculateBassNote(
@@ -689,5 +696,42 @@ export class MidiGenerator {
         const midiBlob = new Blob([midiDataBytes], { type: 'audio/midi' });
 
         return { notesForPianoRoll, midiBlob, finalFileName, chordDetails: generatedChords };
+    }
+
+    // Add helper method to apply voicing flavor
+    private applyVoicingFlavor(
+        voicing: number[],
+        flavor: 'full' | 'sparse' | 'lofi' | 'cinematic' | 'chaotic' | 'pad',
+        baseOctave: number
+    ): number[] {
+        let result = [...voicing];
+        switch (flavor) {
+            case 'full':
+                // No change
+                break;
+            case 'sparse':
+                // Keep only root + top tone
+                result = [result[0], result[result.length - 1]];
+                break;
+            case 'lofi':
+                // Block triad: root + one other
+                result = [result[0]];
+                if (voicing.length > 1) result.push(voicing[1]);
+                break;
+            case 'cinematic':
+                // Rich but avoid clutter: drop 5th in extended chords
+                if (result.length > 4) result = result.filter((_, i) => i !== 2);
+                break;
+            case 'chaotic':
+                // Random micro-shifts for unpredictability
+                result = result.map(n => Math.min(127, Math.max(0, n + ((Math.random() - 0.5) * 4 | 0))));
+                break;
+            case 'pad':
+                // Pad mode: use up to first 4 voices (root, 3rd, 5th, 7th) in close voicing
+                result = result.slice(0, Math.min(result.length, 4));
+                break;
+        }
+        // Ensure unique, sorted, and in range
+        return Array.from(new Set(result.map(n => Math.min(127, Math.max(0, n))))).sort((a, b) => a - b);
     }
 }

@@ -163,7 +163,8 @@ function setupApp() {
                 baseOctave: parseInt(formData.get('baseOctave') as string, 10),
                 chordDurationStr: formData.get('chordDuration') as string,
                 tempo: parseInt(formData.get('tempo') as string, 10),
-                velocity: parseInt(formData.get('velocity') as string, 10)
+                velocity: parseInt(formData.get('velocity') as string, 10),
+                voicingFlavor: formData.get('voicingFlavor') as 'full' | 'sparse' | 'lofi' | 'cinematic' | 'chaotic' | 'pad',
             };
 
             if (!['none', 'first', 'smooth', 'pianist'].includes(options.inversionType)) {
