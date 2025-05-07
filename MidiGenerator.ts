@@ -159,8 +159,10 @@ export interface MidiGenerationOptions {
     outputFileName?: string; // Optional, provide default
     outputType: OutputType; // New option
     inversionType: 'none' | 'first' | 'smooth' | 'pianist';
-    voicingFlavor?: 'full' | 'sparse' | 'lofi' | 'cinematic' | 'chaotic' | 'pad';
-    baseOctave: number;
+    voicingFlavor?:
+    | 'full' | 'sparse' | 'lofi' | 'cinematic' | 'chaotic'
+    | 'pad-minimal' | 'pad-spread' | 'pad-drone'
+    | 'quartal' | 'cluster' | 'gospel' | 'rock' | 'analog' | 'bright' | 'dark';    baseOctave: number;
     chordDurationStr: string;
     tempo: number;
     velocity: number;
@@ -698,40 +700,89 @@ export class MidiGenerator {
         return { notesForPianoRoll, midiBlob, finalFileName, chordDetails: generatedChords };
     }
 
-    // Add helper method to apply voicing flavor
+    /**
+     * Applies the selected voicing flavor.
+     */
     private applyVoicingFlavor(
         voicing: number[],
-        flavor: 'full' | 'sparse' | 'lofi' | 'cinematic' | 'chaotic' | 'pad',
+        flavor: MidiGenerationOptions['voicingFlavor'],
         baseOctave: number
     ): number[] {
         let result = [...voicing];
+        const root = voicing[0];
         switch (flavor) {
-            case 'full':
-                // No change
-                break;
-            case 'sparse':
-                // Keep only root + top tone
-                result = [result[0], result[result.length - 1]];
-                break;
-            case 'lofi':
-                // Block triad: root + one other
-                result = [result[0]];
-                if (voicing.length > 1) result.push(voicing[1]);
-                break;
-            case 'cinematic':
-                // Rich but avoid clutter: drop 5th in extended chords
-                if (result.length > 4) result = result.filter((_, i) => i !== 2);
-                break;
-            case 'chaotic':
-                // Random micro-shifts for unpredictability
-                result = result.map(n => Math.min(127, Math.max(0, n + ((Math.random() - 0.5) * 4 | 0))));
-                break;
-            case 'pad':
-                // Pad mode: use up to first 4 voices (root, 3rd, 5th, 7th) in close voicing
-                result = result.slice(0, Math.min(result.length, 4));
-                break;
+        case 'full':
+            // No change
+            break;
+        case 'sparse':
+            // Root and top tone
+            result = [root, result[result.length - 1]];
+            break;
+        case 'lofi':
+            // Block triad: root + next tone
+            result = [root, result[1] ?? root];
+            break;
+        case 'cinematic':
+            // Drop 5th in extended chords for clarity
+            if (result.length > 4) result = result.filter((_, i) => i !== 2);
+            break;
+        case 'chaotic':
+            // Random micro-shifts
+            result = result.map(n => n + ((Math.random() - 0.5) * 6 | 0));
+            break;
+        case 'pad-minimal':
+            // Root, 5th, 9th
+            result = [root];
+            if (voicing.includes(root + 7)) result.push(root + 7);
+            if (voicing.includes(root + 13)) result.push(root + 13);
+            break;
+        case 'pad-spread':
+            // Triad spread across octaves
+            result = [root, root + 12, root + 19];
+            break;
+        case 'pad-drone':
+            // Drone root + one color tone
+            result = [root];
+            if (voicing.includes(root + 10)) result.push(root + 10);
+            else if (voicing.includes(root + 4)) result.push(root + 4);
+            break;
+        case 'quartal':
+            // Stack perfect fourths
+            result = [root];
+            [5, 12, 17].forEach(i => result.push(root + i));
+            break;
+        case 'cluster':
+            // Tone cluster around root
+            result = [root + 1, root + 2, root + 3];
+            break;
+        case 'gospel':
+            // Rich four-part harmony
+            result = [root, root + 4, root + 10, root + 14];
+            break;
+        case 'rock':
+            // Power chord
+            result = [root, root + 7];
+            break;
+        case 'analog':
+            // Vintage detune: root unchanged, detune inner voices by ±1 semitone
+            result = [root];
+            const inner = voicing.slice(1);  // skip root to avoid muddy low end
+            inner.forEach(n => {
+                result.push(n - 1, n, n + 1);
+            });
+            break;
+        case 'bright':
+            // Top tones up an octave
+            result = voicing.slice(-3).map(n => n + 12);
+            break;
+        case 'dark':
+            // Minor drone
+            result = [root];
+            [3, 10].forEach(i => result.push(root + i));
+            break;
         }
-        // Ensure unique, sorted, and in range
-        return Array.from(new Set(result.map(n => Math.min(127, Math.max(0, n))))).sort((a, b) => a - b);
+        // Clamp, dedupe, sort
+        return Array.from(new Set(result.map(n => Math.min(127, Math.max(0, n)))))
+        .sort((a, b) => a - b);
     }
 }

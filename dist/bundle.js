@@ -1684,27 +1684,66 @@
           const midiBlob = new Blob([midiDataBytes], { type: "audio/midi" });
           return { notesForPianoRoll, midiBlob, finalFileName, chordDetails: generatedChords };
         }
-        // Add helper method to apply voicing flavor
+        /**
+         * Applies the selected voicing flavor.
+         */
         applyVoicingFlavor(voicing, flavor, baseOctave) {
           let result = [...voicing];
+          const root = voicing[0];
           switch (flavor) {
             case "full":
               break;
             case "sparse":
-              result = [result[0], result[result.length - 1]];
+              result = [root, result[result.length - 1]];
               break;
             case "lofi":
-              result = [result[0]];
-              if (voicing.length > 1) result.push(voicing[1]);
+              result = [root, result[1] ?? root];
               break;
             case "cinematic":
               if (result.length > 4) result = result.filter((_, i) => i !== 2);
               break;
             case "chaotic":
-              result = result.map((n) => Math.min(127, Math.max(0, n + ((Math.random() - 0.5) * 4 | 0))));
+              result = result.map((n) => n + ((Math.random() - 0.5) * 6 | 0));
               break;
-            case "pad":
-              result = result.slice(0, Math.min(result.length, 4));
+            case "pad-minimal":
+              result = [root];
+              if (voicing.includes(root + 7)) result.push(root + 7);
+              if (voicing.includes(root + 13)) result.push(root + 13);
+              break;
+            case "pad-spread":
+              result = [root, root + 12, root + 19];
+              break;
+            case "pad-drone":
+              result = [root];
+              if (voicing.includes(root + 10)) result.push(root + 10);
+              else if (voicing.includes(root + 4)) result.push(root + 4);
+              break;
+            case "quartal":
+              result = [root];
+              [5, 12, 17].forEach((i) => result.push(root + i));
+              break;
+            case "cluster":
+              result = [root + 1, root + 2, root + 3];
+              break;
+            case "gospel":
+              result = [root, root + 4, root + 10, root + 14];
+              break;
+            case "rock":
+              result = [root, root + 7];
+              break;
+            case "analog":
+              result = [root];
+              const inner = voicing.slice(1);
+              inner.forEach((n) => {
+                result.push(n - 1, n, n + 1);
+              });
+              break;
+            case "bright":
+              result = voicing.slice(-3).map((n) => n + 12);
+              break;
+            case "dark":
+              result = [root];
+              [3, 10].forEach((i) => result.push(root + i));
               break;
           }
           return Array.from(new Set(result.map((n) => Math.min(127, Math.max(0, n))))).sort((a, b) => a - b);

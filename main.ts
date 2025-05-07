@@ -164,7 +164,7 @@ function setupApp() {
                 chordDurationStr: formData.get('chordDuration') as string,
                 tempo: parseInt(formData.get('tempo') as string, 10),
                 velocity: parseInt(formData.get('velocity') as string, 10),
-                voicingFlavor: formData.get('voicingFlavor') as 'full' | 'sparse' | 'lofi' | 'cinematic' | 'chaotic' | 'pad',
+                voicingFlavor: formData.get('voicingFlavor') as MidiGenerationOptions['voicingFlavor'],
             };
 
             if (!['none', 'first', 'smooth', 'pianist'].includes(options.inversionType)) {
