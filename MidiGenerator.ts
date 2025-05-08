@@ -441,7 +441,7 @@ export class MidiGenerator {
     public generate(options: MidiGenerationOptions): MidiGenerationResult {
         const {
             progressionString,
-            outputFileName = 'progression',
+            outputFileName,
             outputType,
             inversionType,
             baseOctave,
@@ -454,7 +454,14 @@ export class MidiGenerator {
             throw new Error("Chord progression cannot be empty.");
         }
 
-        const finalFileName = outputFileName.endsWith('.mid') ? outputFileName : `${outputFileName}.mid`;
+        let finalFileName;
+        if (outputFileName) {
+            finalFileName = outputFileName.endsWith('.mid') ? outputFileName : `${outputFileName}.mid`;
+        } else {
+            const sanitizedProgressionString = progressionString.replace(/\s+/g, '_');
+            finalFileName = `${sanitizedProgressionString}_${String(outputType)}_${String(inversionType)}.mid`;
+        }
+        
         const chordDurationTicks = this.getDurationTicks(chordDurationStr);
         const chordSymbols = progressionString.trim().split(/\s+/);
         const chordRegex = /^([A-G][#b]?)(.*)$/;
@@ -545,7 +552,7 @@ export class MidiGenerator {
                     // Pianist mode with basic voice anchoring
                     const root = currentChordVoicing[0];
                     const topVoices = currentChordVoicing.slice(1).map(n => n - 12);
-                    const SPREAD_BASE = 12; // more natural sounding than 12
+                    const SPREAD_BASE = 12; 
 
                     if (previousChordVoicing && topVoices.length > 1) {
                         // Generate inversions of top voices only

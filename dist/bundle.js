@@ -1485,7 +1485,7 @@
         generate(options) {
           const {
             progressionString,
-            outputFileName = "progression",
+            outputFileName,
             outputType,
             inversionType,
             baseOctave,
@@ -1496,7 +1496,13 @@
           if (!progressionString || progressionString.trim() === "") {
             throw new Error("Chord progression cannot be empty.");
           }
-          const finalFileName = outputFileName.endsWith(".mid") ? outputFileName : `${outputFileName}.mid`;
+          let finalFileName;
+          if (outputFileName) {
+            finalFileName = outputFileName.endsWith(".mid") ? outputFileName : `${outputFileName}.mid`;
+          } else {
+            const sanitizedProgressionString = progressionString.replace(/\s+/g, "_");
+            finalFileName = `${sanitizedProgressionString}_${String(outputType)}_${String(inversionType)}.mid`;
+          }
           const chordDurationTicks = this.getDurationTicks(chordDurationStr);
           const chordSymbols = progressionString.trim().split(/\s+/);
           const chordRegex = /^([A-G][#b]?)(.*)$/;
