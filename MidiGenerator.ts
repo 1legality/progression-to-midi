@@ -153,12 +153,13 @@ const OCTAVE_ADJUSTMENT_THRESHOLD = 6; // Adjust if average pitch is > 6 semiton
 
 // Define the possible output types
 export type OutputType = 'chordsOnly' | 'chordsAndBass' | 'bassOnly';
+export type InversionType = 'none' | 'first' | 'smooth' | 'pianist' | 'open' | 'spread' | 'cocktail';
 
 export interface MidiGenerationOptions {
     progressionString: string;
     outputFileName?: string; // Optional, provide default
-    outputType: OutputType; // New option
-    inversionType: 'none' | 'first' | 'smooth' | 'pianist';
+    outputType: OutputType;
+    inversionType: InversionType;
     baseOctave: number;
     chordDurationStr: string;
     tempo: number;
@@ -367,7 +368,7 @@ export class MidiGenerator {
     private calculateBassNote(
         chordData: ChordGenerationData,
         baseOctave: number,
-        inversionType: 'none' | 'first' | 'smooth' | 'pianist',
+        inversionType: InversionType,
         previousBassNote: number | null,
         outputType: OutputType,
         chordVoicing: number[] // Pass the actual chord voicing
@@ -543,8 +544,8 @@ export class MidiGenerator {
                 } else if (inversionType === 'pianist') {
                     // Pianist mode with basic voice anchoring
                     const root = currentChordVoicing[0];
-                    const topVoices = currentChordVoicing.slice(1);
-                    const SPREAD_BASE = 7; // more natural sounding than 12
+                    const topVoices = currentChordVoicing.slice(1).map(n => n - 12);
+                    const SPREAD_BASE = 12; // more natural sounding than 12
 
                     if (previousChordVoicing && topVoices.length > 1) {
                         // Generate inversions of top voices only
@@ -568,6 +569,23 @@ export class MidiGenerator {
                         const spreadTop = topVoices.map((note, i) => note + SPREAD_BASE + i * 2);
                         currentChordVoicing = [root, ...spreadTop].sort((a, b) => a - b);
                     }
+                } else if (inversionType === 'open') {
+                    // Open voicing: Drop the 3rd or 5th down an octave
+                    if (currentChordVoicing.length > 2) {
+                        currentChordVoicing[1] -= 12; // Drop the 3rd down an octave
+                        currentChordVoicing.sort((a, b) => a - b);
+                    }
+                } else if (inversionType === 'spread') {
+                    // Spread voicing: 3rds and 7ths spread across two octaves
+                    const root = currentChordVoicing[0];
+                    const spreadNotes = currentChordVoicing.slice(1).map((note, i) => note + 12 * (i % 2));
+                    currentChordVoicing = [root, ...spreadNotes].sort((a, b) => a - b);
+                } else if (inversionType === 'cocktail') {
+                    // Cocktail voicing: Root+7th in left hand, upper melody tone
+                    const root = currentChordVoicing[0];
+                    const seventh = currentChordVoicing.length > 3 ? currentChordVoicing[3] : currentChordVoicing[1];
+                    const melody = currentChordVoicing[currentChordVoicing.length - 1];
+                    currentChordVoicing = [root, seventh, melody].sort((a, b) => a - b);
                 }
 
                 chordData.initialVoicing = [...currentChordVoicing]; // Store the result of inversion/smoothing

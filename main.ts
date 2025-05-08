@@ -1,5 +1,5 @@
 // main.ts
-import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult, CHORD_FORMULAS, NOTES, OutputType } from './MidiGenerator';
+import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult, CHORD_FORMULAS, NOTES, OutputType, InversionType } from './MidiGenerator';
 import { PianoRollDrawer } from './PianoRollDrawer';
 import { SynthChordPlayer, ActiveNote } from './SynthChordPlayer';
 import { ChordInfoModal } from './ChordInfoModal';
@@ -159,17 +159,12 @@ function setupApp() {
                 progressionString: validatedProgression,
                 outputFileName: formData.get('outputFileName') as string || undefined, // Let generator handle default
                 outputType: formData.get('outputType') as OutputType,
-                inversionType: formData.get('inversionType') as 'none' | 'first' | 'smooth' | 'pianist',
+                inversionType: formData.get('inversionType') as InversionType,
                 baseOctave: parseInt(formData.get('baseOctave') as string, 10),
                 chordDurationStr: formData.get('chordDuration') as string,
                 tempo: parseInt(formData.get('tempo') as string, 10),
                 velocity: parseInt(formData.get('velocity') as string, 10)
             };
-
-            if (!['none', 'first', 'smooth', 'pianist'].includes(options.inversionType)) {
-                console.warn(`Invalid inversionType received: ${options.inversionType}. Defaulting to 'none'.`);
-                options.inversionType = 'none';
-            }
 
             // 2. Generate MIDI and Notes
             const generationResult = midiGenerator.generate(options);

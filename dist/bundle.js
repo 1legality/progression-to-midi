@@ -1570,8 +1570,8 @@
                 }
               } else if (inversionType === "pianist") {
                 const root = currentChordVoicing[0];
-                const topVoices = currentChordVoicing.slice(1);
-                const SPREAD_BASE = 7;
+                const topVoices = currentChordVoicing.slice(1).map((n) => n - 12);
+                const SPREAD_BASE = 12;
                 if (previousChordVoicing && topVoices.length > 1) {
                   const possibleVoicings = this.generateInversions(topVoices);
                   let bestTopVoicing = topVoices;
@@ -1590,6 +1590,20 @@
                   const spreadTop = topVoices.map((note, i) => note + SPREAD_BASE + i * 2);
                   currentChordVoicing = [root, ...spreadTop].sort((a, b) => a - b);
                 }
+              } else if (inversionType === "open") {
+                if (currentChordVoicing.length > 2) {
+                  currentChordVoicing[1] -= 12;
+                  currentChordVoicing.sort((a, b) => a - b);
+                }
+              } else if (inversionType === "spread") {
+                const root = currentChordVoicing[0];
+                const spreadNotes = currentChordVoicing.slice(1).map((note, i) => note + 12 * (i % 2));
+                currentChordVoicing = [root, ...spreadNotes].sort((a, b) => a - b);
+              } else if (inversionType === "cocktail") {
+                const root = currentChordVoicing[0];
+                const seventh = currentChordVoicing.length > 3 ? currentChordVoicing[3] : currentChordVoicing[1];
+                const melody = currentChordVoicing[currentChordVoicing.length - 1];
+                currentChordVoicing = [root, seventh, melody].sort((a, b) => a - b);
               }
               chordData.initialVoicing = [...currentChordVoicing];
               chordData.isValid = true;
@@ -2246,10 +2260,6 @@
               tempo: parseInt(formData.get("tempo"), 10),
               velocity: parseInt(formData.get("velocity"), 10)
             };
-            if (!["none", "first", "smooth", "pianist"].includes(options.inversionType)) {
-              console.warn(`Invalid inversionType received: ${options.inversionType}. Defaulting to 'none'.`);
-              options.inversionType = "none";
-            }
             const generationResult = midiGenerator.generate(options);
             lastGeneratedResult = generationResult;
             lastGeneratedNotes = generationResult.notesForPianoRoll;
