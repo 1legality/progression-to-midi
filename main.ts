@@ -286,6 +286,26 @@ function setupApp() {
         handleGeneration(true); // Generate MIDI data only for download
     });
 
+    // Add event listeners to form inputs to trigger preview generation on change
+    const formInputs = form.querySelectorAll('input, select, textarea');
+    formInputs.forEach(input => {
+        input.addEventListener('change', () => {
+            handleGeneration(false); // Generate preview automatically
+        });
+    });
+
+    // // Add a 2-second delay for the progression text box
+    // const progressionInput = form.querySelector('textarea[name="progression"]');
+    // if (progressionInput) {
+    //     let timeoutId: number;
+    //     progressionInput.addEventListener('input', () => {
+    //         clearTimeout(timeoutId);
+    //         timeoutId = window.setTimeout(() => {
+    //             handleGeneration(false); // Generate preview after delay
+    //         }, 2000);
+    //     });
+    // }
+
     // --- Canvas Resize Listener ---
     let resizeTimeout: number;
     window.addEventListener('resize', () => {

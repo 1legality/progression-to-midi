@@ -2364,6 +2364,12 @@
           event.preventDefault();
           handleGeneration(true);
         });
+        const formInputs = form.querySelectorAll("input, select, textarea");
+        formInputs.forEach((input) => {
+          input.addEventListener("change", () => {
+            handleGeneration(false);
+          });
+        });
         let resizeTimeout;
         window.addEventListener("resize", () => {
           clearTimeout(resizeTimeout);
