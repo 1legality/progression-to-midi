@@ -22,11 +22,13 @@
                 <form id="midiForm">
                     <div class="mb-3">
                         <label for="progression" class="form-label">Chord Progression:</label>
-                        <input type="text" id="progression" name="progression" placeholder="e.g., Dm9 G7 Cmaj7 Fmaj7"
-                            class="form-control">
-                        <small class="text-muted">Enter space-separated chord symbols. <button type="button"
-                                class="btn btn-link p-0" id="helpButton" title="Click for help"><i
-                                    class="bi bi-question-square-fill"></i></button></small>
+                        <textarea id="progression" name="progression" class="form-control" rows="2" placeholder="e.g., Am G C F or Am:0.5 G:1 C:2"></textarea>
+                        <small id="progressionHelp" class="form-text text-muted">
+                            Enter chords (e.g., <code>C G Am F</code>). Add durations with a colon (e.g., <code>C:1 G:0.5</code>).
+                            Default is 1 beat.
+                            Click the <i class="bi bi-question-square-fill"></i> icon for all duration options & chord formulas.
+                            <button type="button" class="btn btn-link p-0" id="helpButton" title="Click for more detailed help"><i class="bi bi-question-square-fill"></i></button>
+                        </small>
                         <div class="alert alert-info mt-2 p-2">
                             <strong>💡 Quick Workflow:</strong>
                             <p class="mb-0">Ask your favorite AI for a chord progression (e.g.,
@@ -53,21 +55,6 @@
                                 <option value="3" selected>3 (Medium-Low)</option>
                                 <option value="4">4 (Middle C Range)</option>
                                 <option value="5">5 (High)</option>
-                            </select>
-                        </div>
-                        <div class="col-sm-6">
-                            <label for="chordDuration" class="form-label">Chord Duration:</label>
-                            <select id="chordDuration" name="chordDuration" class="form-select">
-                                <option value="16">Sixteenth Note</option>
-                                <option value="8">Eighth Note</option>
-                                <option value="d4">Dotted Quarter</option>
-                                <option value="4">Quarter Note</option>
-                                <option value="d2">Dotted Half</option>
-                                <option value="2">Half Note</option>
-                                <option value="1" selected>Whole Note</option>
-                                <option value="T1024">2 Whole Notes</option>
-                                <option value="T1536">3 Whole Notes</option>
-                                <option value="T2048">4 Whole Notes</option>
                             </select>
                         </div>
                     </div>

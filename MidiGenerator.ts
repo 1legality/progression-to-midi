@@ -148,7 +148,7 @@ export const CHORD_FORMULAS: Record<string, number[]> = {
     'M7sus': [INTERVALS.P1, INTERVALS.P4, INTERVALS.P5, INTERVALS.M7], // Alias
 };
 
-const TPQN = 128; // MIDI Writer JS default ticks per quarter note
+export const TPQN = 128; // MIDI Writer JS default ticks per quarter note
 const OCTAVE_ADJUSTMENT_THRESHOLD = 6; // Adjust if average pitch is > 6 semitones (half octave) away from target
 
 // Define the possible output types
