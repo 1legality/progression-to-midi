@@ -22,7 +22,7 @@
                 <form id="midiForm">
                     <div class="mb-3">
                         <label for="progression" class="form-label">Chord Progression:</label>
-                        <textarea id="progression" name="progression" class="form-control" rows="2" placeholder="e.g., Am G C F or Am:0.5 G:1 C:2"></textarea>
+                        <input type="text" id="progression" name="progression" class="form-control" placeholder="e.g., Am G C F or Am:0.5 G:1 C:2">
                         <small id="progressionHelp" class="form-text text-muted">
                             Enter chords (e.g., <code>C G Am F</code>). Add durations with a colon (e.g., <code>C:1 G:0.5</code>).
                             Default duration is 1 beat.
@@ -85,7 +85,7 @@
 
                     <div class="my-3">
                         <label for="velocity" class="form-label">Velocity (Loudness): <span id="velocityValue"
-                                class="fw-semibold">100</span></label>
+                                class="fw-semibold">110</span></label>
                         <input type="range" id="velocity" name="velocity" min="1" max="127" value="100"
                             class="form-range">
                     </div>
