@@ -238,41 +238,42 @@ export class MidiGenerator {
     }
 
     /**
-     * Converts a duration input string (beats, letter codes, or T-codes) to MIDI ticks.
+     * Converts a duration input string (bars, letter codes, or T-codes) to MIDI ticks.
      * @param durationInput - The duration string (e.g., "0.5", "1", "q", "8", "T128").
-     *                        If undefined or empty, defaults to a quarter note.
+     *                        If undefined or empty, defaults to 1 bar.
      * @returns The duration in MIDI ticks.
      */
     private getDurationTicks(durationInput?: string): number {
+        const beatsPerBar = 4; // Assuming 4/4 time signature
         if (!durationInput || durationInput.trim() === "") {
-            return TPQN; // Default to a quarter note (1 beat)
+            return TPQN * beatsPerBar; // Default to 1 bar (4 beats)
         }
 
         const input = durationInput.trim();
 
-        // Try parsing as a number first (assumed to be in beats/quarter notes)
-        const numericBeatValue = parseFloat(input);
-        if (!isNaN(numericBeatValue) && numericBeatValue > 0) {
-            return TPQN * numericBeatValue;
+        // Try parsing as a number first (assumed to be in bars)
+        const numericBarValue = parseFloat(input);
+        if (!isNaN(numericBarValue) && numericBarValue > 0) {
+            return TPQN * beatsPerBar * numericBarValue;
         }
 
-        // Fallback to letter/number codes if not a valid number
+        // Removed all shorthand and descriptive cases, keeping only decimal values
         switch (input.toLowerCase()) {
-            case 's': case '16': return TPQN / 4;   // Sixteenth note (0.25 beats)
-            case 'e': case '8': return TPQN / 2;    // Eighth note (0.5 beats)
-            case 'de': case 'd8': return TPQN * 0.75; // Dotted eighth (0.75 beats)
-            case 'q': case '4': return TPQN;        // Quarter note (1 beat)
-            case 'dq': case 'd4': return TPQN * 1.5;// Dotted quarter (1.5 beats)
-            case 'h': case '2': return TPQN * 2;    // Half note (2 beats)
-            case 'dh': case 'd2': return TPQN * 3;  // Dotted half (3 beats)
-            case 'w': case '1': return TPQN * 4;    // Whole note (4 beats)
+            case '0.25': return TPQN / 4;   // 0.25 bars
+            case '0.5': return TPQN / 2;    // 0.5 bars
+            case '0.75': return TPQN * 0.75; // 0.75 bars
+            case '1': return TPQN;        // 1 bar
+            case '1.5': return TPQN * 1.5; // 1.5 bars
+            case '2': return TPQN * 2;    // 2 bars
+            case '3': return TPQN * 3;   // 3 bars
+            case '4': return TPQN * 4;    // 4 bars
             default:
                 // Check for T-codes (absolute ticks)
                 if (/^t\d+$/i.test(input)) {
                     return parseInt(input.substring(1), 10);
                 }
-                console.warn(`Unknown duration: "${input}". Defaulting to quarter note (${TPQN} ticks).`);
-                return TPQN; // Default to a quarter note
+                console.warn(`Unknown duration: "${input}". Defaulting to 1 bar (${TPQN * beatsPerBar} ticks).`);
+                return TPQN * beatsPerBar; // Default to 1 bar
         }
     }
 

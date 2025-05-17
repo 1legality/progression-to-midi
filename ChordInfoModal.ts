@@ -14,18 +14,17 @@ export class ChordInfoModal {
 
         // --- Chord Durations Section ---
         modalContent += '<h5>Chord Durations</h5>';
-        modalContent += '<p>Specify duration per chord using a colon (e.g., <code>C:1 G:0.5 Am:2</code>). If no duration is given, it defaults to 1 beat (a quarter note).</p>';
         modalContent += '<table class="table table-bordered">';
-        modalContent += '<thead><tr><th>Code</th><th>Shorthand</th><th>Description</th><th>Beats</th></tr></thead>';
+        modalContent += '<thead><tr><th>Code</th><th>Description</th></tr></thead>';
         modalContent += '<tbody>';
-        modalContent += '<tr><td><code>0.25</code></td><td><code>s</code>, <code>16</code></td><td>Sixteenth note</td><td>0.25</td></tr>';
-        modalContent += '<tr><td><code>0.5</code></td><td><code>e</code>, <code>8</code></td><td>Eighth note</td><td>0.5</td></tr>';
-        modalContent += '<tr><td><code>0.75</code></td><td><code>de</code>, <code>d8</code></td><td>Dotted eighth note</td><td>0.75</td></tr>';
-        modalContent += '<tr><td><code>1</code></td><td><code>q</code>, <code>4</code></td><td>Quarter note (default)</td><td>1</td></tr>';
-        modalContent += '<tr><td><code>1.5</code></td><td><code>dq</code>, <code>d4</code></td><td>Dotted quarter note</td><td>1.5</td></tr>';
-        modalContent += '<tr><td><code>2</code></td><td><code>h</code>, <code>2</code></td><td>Half note</td><td>2</td></tr>';
-        modalContent += '<tr><td><code>3</code></td><td><code>dh</code>, <code>d2</code></td><td>Dotted half note</td><td>3</td></tr>';
-        modalContent += '<tr><td><code>4</code></td><td><code>w</code>, <code>1</code></td><td>Whole note</td><td>4</td></tr>';
+        modalContent += '<tr><td><code>0.25</code></td><td>Quarter of a bar (e.g., sixteenth note in 4/4)</td></tr>';
+        modalContent += '<tr><td><code>0.5</code></td><td>Half a bar (e.g., eighth note in 4/4)</td></tr>';
+        modalContent += '<tr><td><code>0.75</code></td><td>Three-quarters of a bar (e.g., dotted eighth note in 4/4)</td></tr>';
+        modalContent += '<tr><td><code>1</code></td><td>One bar (e.g., quarter note in 4/4)</td></tr>';
+        modalContent += '<tr><td><code>1.5</code></td><td>One and a half bars (e.g., dotted quarter note in 4/4)</td></tr>';
+        modalContent += '<tr><td><code>2</code></td><td>Two bars (e.g., half note in 4/4)</td></tr>';
+        modalContent += '<tr><td><code>3</code></td><td>Three bars (e.g., dotted half note in 4/4)</td></tr>';
+        modalContent += '<tr><td><code>4</code></td><td>Four bars (e.g., whole note in 4/4)</td></tr>';
         modalContent += '</tbody>';
         modalContent += '</table>';
 
@@ -36,7 +35,7 @@ export class ChordInfoModal {
         modalContent += `<tr><td><code>T${TPQN / 4}</code></td><td>Sixteenth note</td><td>${TPQN / 4}</td></tr>`;
         modalContent += `<tr><td><code>T${TPQN / 2}</code></td><td>Eighth note</td><td>${TPQN / 2}</td></tr>`;
         modalContent += `<tr><td><code>T${TPQN}</code></td><td>Quarter note</td><td>${TPQN}</td></tr>`;
-        modalContent += `<tr><td><code>T${TPQN * 2}</code></td><td>Half note</td><td>${TPQN * 2}</td></tr>`;
+        modalContent += `<tr><td><code>T${TPQN * 2}</code></td><td>Half note</td><td>${TPQN * 2}</code></td></tr>`;
         modalContent += `<tr><td><code>T${TPQN * 4}</code></td><td>Whole note</td><td>${TPQN * 4}</td></tr>`;
         modalContent += '</tbody>';
         modalContent += '</table>';

@@ -1318,59 +1318,52 @@
           return midiVal;
         }
         /**
-         * Converts a duration input string (beats, letter codes, or T-codes) to MIDI ticks.
+         * Converts a duration input string (bars, letter codes, or T-codes) to MIDI ticks.
          * @param durationInput - The duration string (e.g., "0.5", "1", "q", "8", "T128").
-         *                        If undefined or empty, defaults to a quarter note.
+         *                        If undefined or empty, defaults to 1 bar.
          * @returns The duration in MIDI ticks.
          */
         getDurationTicks(durationInput) {
+          const beatsPerBar = 4;
           if (!durationInput || durationInput.trim() === "") {
-            return TPQN;
+            return TPQN * beatsPerBar;
           }
           const input = durationInput.trim();
-          const numericBeatValue = parseFloat(input);
-          if (!isNaN(numericBeatValue) && numericBeatValue > 0) {
-            return TPQN * numericBeatValue;
+          const numericBarValue = parseFloat(input);
+          if (!isNaN(numericBarValue) && numericBarValue > 0) {
+            return TPQN * beatsPerBar * numericBarValue;
           }
           switch (input.toLowerCase()) {
-            case "s":
-            case "16":
+            case "0.25":
               return TPQN / 4;
-            // Sixteenth note (0.25 beats)
-            case "e":
-            case "8":
+            // 0.25 bars
+            case "0.5":
               return TPQN / 2;
-            // Eighth note (0.5 beats)
-            case "de":
-            case "d8":
+            // 0.5 bars
+            case "0.75":
               return TPQN * 0.75;
-            // Dotted eighth (0.75 beats)
-            case "q":
-            case "4":
+            // 0.75 bars
+            case "1":
               return TPQN;
-            // Quarter note (1 beat)
-            case "dq":
-            case "d4":
+            // 1 bar
+            case "1.5":
               return TPQN * 1.5;
-            // Dotted quarter (1.5 beats)
-            case "h":
+            // 1.5 bars
             case "2":
               return TPQN * 2;
-            // Half note (2 beats)
-            case "dh":
-            case "d2":
+            // 2 bars
+            case "3":
               return TPQN * 3;
-            // Dotted half (3 beats)
-            case "w":
-            case "1":
+            // 3 bars
+            case "4":
               return TPQN * 4;
-            // Whole note (4 beats)
+            // 4 bars
             default:
               if (/^t\d+$/i.test(input)) {
                 return parseInt(input.substring(1), 10);
               }
-              console.warn(`Unknown duration: "${input}". Defaulting to quarter note (${TPQN} ticks).`);
-              return TPQN;
+              console.warn(`Unknown duration: "${input}". Defaulting to 1 bar (${TPQN * beatsPerBar} ticks).`);
+              return TPQN * beatsPerBar;
           }
         }
         /**
@@ -2151,18 +2144,17 @@
           modalContent += "</div>";
           modalContent += '<div class="modal-body">';
           modalContent += "<h5>Chord Durations</h5>";
-          modalContent += "<p>Specify duration per chord using a colon (e.g., <code>C:1 G:0.5 Am:2</code>). If no duration is given, it defaults to 1 beat (a quarter note).</p>";
           modalContent += '<table class="table table-bordered">';
-          modalContent += "<thead><tr><th>Code</th><th>Shorthand</th><th>Description</th><th>Beats</th></tr></thead>";
+          modalContent += "<thead><tr><th>Code</th><th>Description</th></tr></thead>";
           modalContent += "<tbody>";
-          modalContent += "<tr><td><code>0.25</code></td><td><code>s</code>, <code>16</code></td><td>Sixteenth note</td><td>0.25</td></tr>";
-          modalContent += "<tr><td><code>0.5</code></td><td><code>e</code>, <code>8</code></td><td>Eighth note</td><td>0.5</td></tr>";
-          modalContent += "<tr><td><code>0.75</code></td><td><code>de</code>, <code>d8</code></td><td>Dotted eighth note</td><td>0.75</td></tr>";
-          modalContent += "<tr><td><code>1</code></td><td><code>q</code>, <code>4</code></td><td>Quarter note (default)</td><td>1</td></tr>";
-          modalContent += "<tr><td><code>1.5</code></td><td><code>dq</code>, <code>d4</code></td><td>Dotted quarter note</td><td>1.5</td></tr>";
-          modalContent += "<tr><td><code>2</code></td><td><code>h</code>, <code>2</code></td><td>Half note</td><td>2</td></tr>";
-          modalContent += "<tr><td><code>3</code></td><td><code>dh</code>, <code>d2</code></td><td>Dotted half note</td><td>3</td></tr>";
-          modalContent += "<tr><td><code>4</code></td><td><code>w</code>, <code>1</code></td><td>Whole note</td><td>4</td></tr>";
+          modalContent += "<tr><td><code>0.25</code></td><td>Quarter of a bar (e.g., sixteenth note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>0.5</code></td><td>Half a bar (e.g., eighth note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>0.75</code></td><td>Three-quarters of a bar (e.g., dotted eighth note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>1</code></td><td>One bar (e.g., quarter note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>1.5</code></td><td>One and a half bars (e.g., dotted quarter note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>2</code></td><td>Two bars (e.g., half note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>3</code></td><td>Three bars (e.g., dotted half note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>4</code></td><td>Four bars (e.g., whole note in 4/4)</td></tr>";
           modalContent += "</tbody>";
           modalContent += "</table>";
           modalContent += "<p><strong>Advanced:</strong> Use absolute ticks for precise timing. Prepend with <code>T</code> (e.g., <code>T128</code> for a quarter note).</p>";
@@ -2172,7 +2164,7 @@
           modalContent += `<tr><td><code>T${TPQN / 4}</code></td><td>Sixteenth note</td><td>${TPQN / 4}</td></tr>`;
           modalContent += `<tr><td><code>T${TPQN / 2}</code></td><td>Eighth note</td><td>${TPQN / 2}</td></tr>`;
           modalContent += `<tr><td><code>T${TPQN}</code></td><td>Quarter note</td><td>${TPQN}</td></tr>`;
-          modalContent += `<tr><td><code>T${TPQN * 2}</code></td><td>Half note</td><td>${TPQN * 2}</td></tr>`;
+          modalContent += `<tr><td><code>T${TPQN * 2}</code></td><td>Half note</td><td>${TPQN * 2}</code></td></tr>`;
           modalContent += `<tr><td><code>T${TPQN * 4}</code></td><td>Whole note</td><td>${TPQN * 4}</td></tr>`;
           modalContent += "</tbody>";
           modalContent += "</table>";
