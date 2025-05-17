@@ -258,14 +258,14 @@ export class MidiGenerator {
 
         // Fallback to letter/number codes if not a valid number
         switch (input.toLowerCase()) {
-            case 'w': case '1': return TPQN * 4;    // Whole note (4 beats)
-            case 'h': case '2': return TPQN * 2;    // Half note (2 beats)
-            case 'dh': case 'd2': return TPQN * 3;  // Dotted half (3 beats)
-            case 'q': case '4': return TPQN;        // Quarter note (1 beat)
-            case 'dq': case 'd4': return TPQN * 1.5;// Dotted quarter (1.5 beats)
+            case 's': case '16': return TPQN / 4;   // Sixteenth note (0.25 beats)
             case 'e': case '8': return TPQN / 2;    // Eighth note (0.5 beats)
             case 'de': case 'd8': return TPQN * 0.75; // Dotted eighth (0.75 beats)
-            case 's': case '16': return TPQN / 4;   // Sixteenth note (0.25 beats)
+            case 'q': case '4': return TPQN;        // Quarter note (1 beat)
+            case 'dq': case 'd4': return TPQN * 1.5;// Dotted quarter (1.5 beats)
+            case 'h': case '2': return TPQN * 2;    // Half note (2 beats)
+            case 'dh': case 'd2': return TPQN * 3;  // Dotted half (3 beats)
+            case 'w': case '1': return TPQN * 4;    // Whole note (4 beats)
             default:
                 // Check for T-codes (absolute ticks)
                 if (/^t\d+$/i.test(input)) {

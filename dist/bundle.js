@@ -1333,26 +1333,10 @@
             return TPQN * numericBeatValue;
           }
           switch (input.toLowerCase()) {
-            case "w":
-            case "1":
-              return TPQN * 4;
-            // Whole note (4 beats)
-            case "h":
-            case "2":
-              return TPQN * 2;
-            // Half note (2 beats)
-            case "dh":
-            case "d2":
-              return TPQN * 3;
-            // Dotted half (3 beats)
-            case "q":
-            case "4":
-              return TPQN;
-            // Quarter note (1 beat)
-            case "dq":
-            case "d4":
-              return TPQN * 1.5;
-            // Dotted quarter (1.5 beats)
+            case "s":
+            case "16":
+              return TPQN / 4;
+            // Sixteenth note (0.25 beats)
             case "e":
             case "8":
               return TPQN / 2;
@@ -1361,10 +1345,26 @@
             case "d8":
               return TPQN * 0.75;
             // Dotted eighth (0.75 beats)
-            case "s":
-            case "16":
-              return TPQN / 4;
-            // Sixteenth note (0.25 beats)
+            case "q":
+            case "4":
+              return TPQN;
+            // Quarter note (1 beat)
+            case "dq":
+            case "d4":
+              return TPQN * 1.5;
+            // Dotted quarter (1.5 beats)
+            case "h":
+            case "2":
+              return TPQN * 2;
+            // Half note (2 beats)
+            case "dh":
+            case "d2":
+              return TPQN * 3;
+            // Dotted half (3 beats)
+            case "w":
+            case "1":
+              return TPQN * 4;
+            // Whole note (4 beats)
             default:
               if (/^t\d+$/i.test(input)) {
                 return parseInt(input.substring(1), 10);
@@ -2165,16 +2165,17 @@
           modalContent += '<li class="list-group-item py-1"><code>3</code> (dotted half note)</li>';
           modalContent += '<li class="list-group-item py-1"><code>4</code> (whole note)</li>';
           modalContent += "</ul></li>";
-          modalContent += "<li><strong>Letter Codes:</strong> Common musical notation codes.";
+          modalContent += '<li class="list-group list-group-item alert alert-info py-2 mt-2"><strong>Understanding Duration Precedence:</strong> The system first attempts to interpret the duration as a <strong>Numeric Beat</strong> value. If successful (e.g., "1", "0.5", "4"), this value is used. For example, an input of <code>:1</code> is treated as 1 beat (a quarter note), and <code>:4</code> is 4 beats (a whole note). If the input is not a simple number, it then checks against the <strong>Symbolic Codes</strong> below.</li>';
+          modalContent += "<li><strong>Symbolic Codes:</strong> Common musical notation codes. These are used if the duration is not interpreted as a direct numeric beat value.";
           modalContent += '<ul class="list-group list-group-flush mb-2">';
-          modalContent += '<li class="list-group-item py-1"><code>s</code> or <code>16</code>: Sixteenth note (0.25 beats)</li>';
-          modalContent += '<li class="list-group-item py-1"><code>e</code> or <code>8</code>: Eighth note (0.5 beats)</li>';
+          modalContent += '<li class="list-group-item py-1"><code>s</code>, <code>16</code>: Sixteenth note (0.25 beats)</li>';
+          modalContent += '<li class="list-group-item py-1"><code>e</code>, <code>8</code>: Eighth note (0.5 beats)</li>';
           modalContent += '<li class="list-group-item py-1"><code>de</code> or <code>d8</code>: Dotted Eighth (0.75 beats)</li>';
-          modalContent += '<li class="list-group-item py-1"><code>q</code> or <code>4</code>: Quarter note (1 beat)</li>';
+          modalContent += '<li class="list-group-item py-1"><code>q</code>, <code>4</code>: Quarter note (1 beat)</li>';
           modalContent += '<li class="list-group-item py-1"><code>dq</code> or <code>d4</code>: Dotted Quarter (1.5 beats)</li>';
-          modalContent += '<li class="list-group-item py-1"><code>h</code> or <code>2</code>: Half note (2 beats)</li>';
+          modalContent += '<li class="list-group-item py-1"><code>h</code>, <code>2</code>: Half note (2 beats)</li>';
           modalContent += '<li class="list-group-item py-1"><code>dh</code> or <code>d2</code>: Dotted Half (3 beats)</li>';
-          modalContent += '<li class="list-group-item py-1"><code>w</code> or <code>1</code>: Whole note (4 beats)</li>';
+          modalContent += '<li class="list-group-item py-1"><code>w</code>, <code>1</code>: Whole note (4 beats)</li>';
           modalContent += "</ul></li>";
           modalContent += `<li><strong>Absolute Ticks (Advanced):</strong> For precise MIDI tick-based timing. Prepend with 'T'. (TPQN = ${TPQN} ticks per quarter note).`;
           modalContent += '<ul class="list-group list-group-flush mb-2">';
