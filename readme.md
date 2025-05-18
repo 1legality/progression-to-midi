@@ -39,6 +39,12 @@ This application now runs entirely in your browser after a build step.
     * Click the "Generate & Download MIDI" button.
     * Your browser will prompt you to save the generated `.mid` file.
 
+## Chord Duration Format
+
+- Chord durations are specified in **bars** (not note values).
+- Example: `C:1 G:0.5 Am F` means C for 1 bar, G for half a bar, Am and F will use the default duration selected in the Chord Duration dropdown.
+- If no duration is provided for a chord, the default is the value selected in the Chord Duration dropdown on the web interface.
+
 **Development Workflow (Optional)**
 
 If you plan to modify the TypeScript code (`src/main.ts`), you can use the watch command:

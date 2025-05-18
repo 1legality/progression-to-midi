@@ -14,6 +14,7 @@ export class ChordInfoModal {
 
         // --- Chord Durations Section ---
         modalContent += '<h5>Chord Durations</h5>';
+        modalContent += '<p>Any positive decimal number is accepted (e.g., 0.33, 2.25, etc.). The value represents bars.</p>';
         modalContent += '<table class="table table-bordered">';
         modalContent += '<thead><tr><th>Code</th><th>Description</th></tr></thead>';
         modalContent += '<tbody>';
