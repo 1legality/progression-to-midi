@@ -1511,7 +1511,7 @@
             outputType,
             inversionType,
             baseOctave,
-            // chordDurationStr, // No longer used globally
+            chordDurationStr,
             tempo,
             velocity
           } = options;
@@ -1535,7 +1535,7 @@
             if (!entry) continue;
             const parts = entry.split(":");
             const chordSymbol = parts[0];
-            const durationString = parts.length > 1 ? parts[1] : void 0;
+            const durationString = parts.length > 1 ? parts[1] : chordDurationStr;
             const currentChordDurationTicks = this.getDurationTicks(durationString);
             const match = chordSymbol.match(chordRegex);
             let chordData = {
@@ -2355,7 +2355,7 @@
               outputType: formData.get("outputType"),
               inversionType: formData.get("inversionType"),
               baseOctave: parseInt(formData.get("baseOctave"), 10),
-              // chordDurationStr: formData.get('chordDuration') as string, // Removed
+              chordDurationStr: formData.get("chordDuration"),
               tempo: parseInt(formData.get("tempo"), 10),
               velocity: parseInt(formData.get("velocity"), 10)
             };

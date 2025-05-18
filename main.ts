@@ -186,7 +186,7 @@ function setupApp() {
                 outputType: formData.get('outputType') as OutputType,
                 inversionType: formData.get('inversionType') as InversionType,
                 baseOctave: parseInt(formData.get('baseOctave') as string, 10),
-                // chordDurationStr: formData.get('chordDuration') as string, // Removed
+                chordDurationStr: formData.get('chordDuration') as string,
                 tempo: parseInt(formData.get('tempo') as string, 10),
                 velocity: parseInt(formData.get('velocity') as string, 10)
             };

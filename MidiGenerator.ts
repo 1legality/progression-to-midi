@@ -161,7 +161,7 @@ export interface MidiGenerationOptions {
     outputType: OutputType;
     inversionType: InversionType;
     baseOctave: number;
-    // chordDurationStr: string; // Replaced by per-chord duration in progressionString
+    chordDurationStr?: string; // Optional, provide default
     tempo: number;
     velocity: number;
 }
@@ -467,7 +467,7 @@ export class MidiGenerator {
             outputType,
             inversionType,
             baseOctave,
-            // chordDurationStr, // No longer used globally
+            chordDurationStr,
             tempo,
             velocity
         } = options;
@@ -499,7 +499,8 @@ export class MidiGenerator {
 
             const parts = entry.split(':');
             const chordSymbol = parts[0];
-            const durationString = parts.length > 1 ? parts[1] : undefined; // Undefined if no duration specified
+            // Use duration from entry, or fallback to chordDurationStr, or undefined
+            const durationString = parts.length > 1 ? parts[1] : chordDurationStr;
 
             const currentChordDurationTicks = this.getDurationTicks(durationString);
 
