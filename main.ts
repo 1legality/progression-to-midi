@@ -116,6 +116,13 @@ function setupApp() {
         return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?$`, 'i');
     }
 
+    const VALID_DURATION_CODES = [
+        'w', '1', 'h', '2', 'dh', 'd2',
+        'q', '4', 'dq', 'd4', 'e', '8',
+        'de', 'd8', 's', '16'
+    ];
+
+
     function validateChordProgression(progression: string): string {
         const normalizedProgression = progression
             .replace(/\|/g, ' ') // Replace pipes with spaces
@@ -124,22 +131,40 @@ function setupApp() {
             .replace(/\s+/g, ' ') // Normalize multiple spaces
             .trim();
 
-        const chords = normalizedProgression.split(/\s+/); // Split by spaces
-        const validChordPattern = generateValidChordPattern(); // Generate the updated pattern
-
-        for (const chord of chords) {
-            if (!chord) continue; // Skip empty strings if multiple spaces occurred
-
-            // Test against the more flexible pattern
-            if (!validChordPattern.test(chord)) {
-                // You could potentially add more specific checks here if needed,
-                // but this error message covers most cases where the format is wrong
-                // or the quality isn't in CHORD_FORMULAS.
-                throw new Error(`Invalid chord format or unknown quality detected: "${chord}". Please use formats like C, Cm, G7, Bbmaj7.`);
-            }
+        if (!normalizedProgression) {
+            return ""; // Allow empty progression to clear piano roll
         }
 
-        return normalizedProgression;
+        const chordEntries = normalizedProgression.split(/\s+/);
+        const validChordSymbolPattern = generateValidChordPattern();
+        const validatedEntries: string[] = [];
+
+        for (const entry of chordEntries) {
+            if (!entry) continue;
+
+            const parts = entry.split(':');
+            const chordSymbol = parts[0];
+            const durationStr = parts.length > 1 ? parts[1] : undefined;
+
+            if (!validChordSymbolPattern.test(chordSymbol)) {
+                throw new Error(`Invalid chord symbol: "${chordSymbol}" in entry "${entry}". Use formats like C, Cm, G7.`);
+            }
+
+            if (durationStr !== undefined) {
+                const numericDuration = parseFloat(durationStr);
+                const isValidNumeric = !isNaN(numericDuration) && numericDuration > 0;
+                const isKnownCode = VALID_DURATION_CODES.includes(durationStr.toLowerCase());
+                const isTCode = /^t\d+$/i.test(durationStr);
+
+                if (!isValidNumeric && !isKnownCode && !isTCode) {
+                    throw new Error(`Invalid duration: "${durationStr}" for chord "${chordSymbol}". Use beats (e.g., 0.5, 1), codes (e.g., q, 8, d4), or T-codes (e.g., T128).`);
+                }
+                validatedEntries.push(`${chordSymbol}:${durationStr}`);
+            } else {
+                validatedEntries.push(chordSymbol); // No duration specified, MidiGenerator will use default
+            }
+        }
+        return validatedEntries.join(' ');
     }
 
     // --- Common function to get options and generate MIDI ---
@@ -175,8 +200,8 @@ function setupApp() {
             lastGeneratedMidiBlob = generationResult.midiBlob; // Store the MIDI blob for playback
 
             // Render chord buttons for the entire progression
-            const progressionChords = validatedProgression.split(' ');
-            pianoRollDrawer.renderChordButtons(progressionChords, chordDetails);
+            const progressionChordSymbols = validatedProgression.split(' ').map(entry => entry.split(':')[0]);
+            pianoRollDrawer.renderChordButtons(progressionChordSymbols, chordDetails);
 
             // 3. Update UI / Trigger Download
             if (isDownloadOnly) {

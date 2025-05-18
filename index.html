@@ -22,16 +22,16 @@
                 <form id="midiForm">
                     <div class="mb-3">
                         <label for="progression" class="form-label">Chord Progression:</label>
-                        <input type="text" id="progression" name="progression" placeholder="e.g., Dm9 G7 Cmaj7 Fmaj7"
-                            class="form-control">
-                        <small class="text-muted">Enter space-separated chord symbols. <button type="button"
-                                class="btn btn-link p-0" id="helpButton" title="Click for help"><i
-                                    class="bi bi-question-square-fill"></i></button></small>
+                        <input type="text" id="progression" name="progression" class="form-control">
+                        <small id="progressionHelp" class="form-text text-muted">
+                            Enter chords (e.g., <code>C G Am F</code>). Add durations with a colon (e.g., <code>C:1 G:0.5</code>, where the number is in bars).
+                            If no duration is provided, the default will be the value selected in the Chord Duration dropdown below.
+                            <button type="button" class="btn btn-link p-0" id="helpButton" title="Click for more detailed help" style="font-size:1.2em; vertical-align:middle;" aria-label="Help"><i class="bi bi-question-circle"></i></button>
+                        </small>
                         <div class="alert alert-info mt-2 p-2">
                             <strong>💡 Quick Workflow:</strong>
-                            <p class="mb-0">Ask your favorite AI for a chord progression (e.g.,
-                                "<code>Am G C F</code>"). Paste the chords here, choose your options below, and click
-                                generate!</p>
+                            <p class="mb-0">Ask your favorite AI for a chord progression. Paste the chords here, choose your options below, and click
+                                Download!</p>
                         </div>
                     </div>
 
@@ -56,18 +56,18 @@
                             </select>
                         </div>
                         <div class="col-sm-6">
-                            <label for="chordDuration" class="form-label">Chord Duration:</label>
+                            <label for="chordDuration" class="form-label">Chord Duration (in bars):</label>
                             <select id="chordDuration" name="chordDuration" class="form-select">
-                                <option value="16">Sixteenth Note</option>
-                                <option value="8">Eighth Note</option>
-                                <option value="d4">Dotted Quarter</option>
-                                <option value="4">Quarter Note</option>
-                                <option value="d2">Dotted Half</option>
-                                <option value="2">Half Note</option>
-                                <option value="1" selected>Whole Note</option>
-                                <option value="T1024">2 Whole Notes</option>
-                                <option value="T1536">3 Whole Notes</option>
-                                <option value="T2048">4 Whole Notes</option>
+                                <option value="0.25">0.25</option>
+                                <option value="0.5">0.5</option>
+                                <option value="0.75">0.75</option>
+                                <option value="1" selected>1</option>
+                                <option value="1.5">1.5</option>
+                                <option value="2">2</option>
+                                <option value="4">4</option>
+                                <option value="8">8</option>
+                                <option value="12">12</option>
+                                <option value="16">16</option>
                             </select>
                         </div>
                     </div>
@@ -77,7 +77,7 @@
                         <div class="mb-3">
                             <label for="outputType" class="form-label">Output Type:</label>
                             <select id="outputType" name="outputType" class="form-select">
-                                <option value="chordsOnly" selected>Chords Only</option>
+                                <option value="chordsOnly">Chords Only</option>
                                 <option value="chordsAndBass" selected>Chords + Bass</option>
                                 <option value="bassOnly">Bass Only</option>
                             </select>
@@ -89,7 +89,7 @@
                                 <option value="none">None (Root Position)</option>
                                 <option value="first">1st Inversion</option>
                                 <option value="smooth" selected>Smooth Voice Leading</option>
-                                <option value="pianist" selected>Pianist</option>
+                                <option value="pianist">Pianist</option>
                                 <option value="open">Open Voicing</option>
                                 <option value="spread">Spread Voicing</option>
                                 <option value="cocktail">Cocktail Voicing</option>
@@ -99,7 +99,7 @@
 
                     <div class="my-3">
                         <label for="velocity" class="form-label">Velocity (Loudness): <span id="velocityValue"
-                                class="fw-semibold">100</span></label>
+                                class="fw-semibold">110</span></label>
                         <input type="range" id="velocity" name="velocity" min="1" max="127" value="100"
                             class="form-range">
                     </div>

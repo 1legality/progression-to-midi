@@ -148,7 +148,7 @@ export const CHORD_FORMULAS: Record<string, number[]> = {
     'M7sus': [INTERVALS.P1, INTERVALS.P4, INTERVALS.P5, INTERVALS.M7], // Alias
 };
 
-const TPQN = 128; // MIDI Writer JS default ticks per quarter note
+export const TPQN = 128; // MIDI Writer JS default ticks per quarter note
 const OCTAVE_ADJUSTMENT_THRESHOLD = 6; // Adjust if average pitch is > 6 semitones (half octave) away from target
 
 // Define the possible output types
@@ -161,7 +161,7 @@ export interface MidiGenerationOptions {
     outputType: OutputType;
     inversionType: InversionType;
     baseOctave: number;
-    chordDurationStr: string;
+    chordDurationStr?: string; // Optional, provide default
     tempo: number;
     velocity: number;
 }
@@ -237,21 +237,43 @@ export class MidiGenerator {
         return midiVal;
     }
 
-    private getDurationTicks(durationCode: string): number {
-        switch (durationCode) {
-            case '16': return TPQN / 4;
-            case '8': return TPQN / 2;
-            case 'd4': return TPQN * 1.5;
-            case '4': return TPQN;
-            case 'd2': return TPQN * 3;
-            case '2': return TPQN * 2;
-            case '1': return TPQN * 4;
-            case 'T1024': return 1024;
-            case 'T1536': return 1536;
-            case 'T2048': return 2048;
+    /**
+     * Converts a duration input string (bars, letter codes, or T-codes) to MIDI ticks.
+     * @param durationInput - The duration string (e.g., "0.5", "1", "q", "8", "T128").
+     *                        If undefined or empty, defaults to 1 bar.
+     * @returns The duration in MIDI ticks.
+     */
+    private getDurationTicks(durationInput?: string): number {
+        const beatsPerBar = 4; // Assuming 4/4 time signature
+        if (!durationInput || durationInput.trim() === "") {
+            return TPQN * beatsPerBar; // Default to 1 bar (4 beats)
+        }
+
+        const input = durationInput.trim();
+
+        // Try parsing as a number first (assumed to be in bars)
+        const numericBarValue = parseFloat(input);
+        if (!isNaN(numericBarValue) && numericBarValue > 0) {
+            return TPQN * beatsPerBar * numericBarValue;
+        }
+
+        // Removed all shorthand and descriptive cases, keeping only decimal values
+        switch (input.toLowerCase()) {
+            case '0.25': return TPQN / 4;   // 0.25 bars
+            case '0.5': return TPQN / 2;    // 0.5 bars
+            case '0.75': return TPQN * 0.75; // 0.75 bars
+            case '1': return TPQN;        // 1 bar
+            case '1.5': return TPQN * 1.5; // 1.5 bars
+            case '2': return TPQN * 2;    // 2 bars
+            case '3': return TPQN * 3;   // 3 bars
+            case '4': return TPQN * 4;    // 4 bars
             default:
-                console.warn(`Unknown duration code: ${durationCode}. Defaulting to quarter note (${TPQN} ticks).`);
-                return TPQN;
+                // Check for T-codes (absolute ticks)
+                if (/^t\d+$/i.test(input)) {
+                    return parseInt(input.substring(1), 10);
+                }
+                console.warn(`Unknown duration: "${input}". Defaulting to 1 bar (${TPQN * beatsPerBar} ticks).`);
+                return TPQN * beatsPerBar; // Default to 1 bar
         }
     }
 
@@ -458,12 +480,12 @@ export class MidiGenerator {
         if (outputFileName) {
             finalFileName = outputFileName.endsWith('.mid') ? outputFileName : `${outputFileName}.mid`;
         } else {
-            const sanitizedProgressionString = progressionString.replace(/\s+/g, '_');
+            const sanitizedProgressionString = progressionString.replace(/\s+/g, '_').replace(/:/g, '-');
             finalFileName = `${sanitizedProgressionString}_${String(outputType)}_${String(inversionType)}.mid`;
         }
-        
-        const chordDurationTicks = this.getDurationTicks(chordDurationStr);
-        const chordSymbols = progressionString.trim().split(/\s+/);
+
+        // const chordDurationTicks = this.getDurationTicks(chordDurationStr); // OLD
+        const chordEntries = progressionString.trim().split(/\s+/); // NEW: e.g., ["Am:0.5", "G:1", "C"]
         const chordRegex = /^([A-G][#b]?)(.*)$/;
 
         const generatedChords: ChordGenerationData[] = [];
@@ -472,13 +494,21 @@ export class MidiGenerator {
         let previousBassNote: number | null = null; // Track previous bass note
 
         // --- Step 1: Generate Initial Voicings (Root or Smoothed) ---
-        for (const symbol of chordSymbols) {
-            if (!symbol) continue;
-            const match = symbol.match(chordRegex);
+        for (const entry of chordEntries) {
+            if (!entry) continue;
+
+            const parts = entry.split(':');
+            const chordSymbol = parts[0];
+            // Use duration from entry, or fallback to chordDurationStr, or undefined
+            const durationString = parts.length > 1 ? parts[1] : chordDurationStr;
+
+            const currentChordDurationTicks = this.getDurationTicks(durationString);
+
+            const match = chordSymbol.match(chordRegex);
             let chordData: ChordGenerationData = {
-                symbol: symbol,
+                symbol: chordSymbol,
                 startTimeTicks: currentTick,
-                durationTicks: chordDurationTicks,
+                durationTicks: currentChordDurationTicks,
                 initialVoicing: [],
                 adjustedVoicing: [],
                 rootNoteName: '',
@@ -487,9 +517,9 @@ export class MidiGenerator {
             };
 
             if (!match) {
-                console.warn(`Could not parse chord symbol: "${symbol}". Skipping.`);
+                console.warn(`Could not parse chord symbol: "${chordSymbol}" in entry "${entry}". Skipping.`);
                 generatedChords.push(chordData);
-                currentTick += chordDurationTicks;
+                currentTick += currentChordDurationTicks;
                 previousChordVoicing = null;
                 continue;
             }
@@ -507,7 +537,7 @@ export class MidiGenerator {
                         formulaIntervals = CHORD_FORMULAS['maj'];
                         qualityAndExtensions = 'maj';
                     } else {
-                        console.warn(`Chord quality "${qualityAndExtensions}" not found for "${symbol}". Defaulting to major triad.`);
+                        console.warn(`Chord quality "${qualityAndExtensions}" not found for "${chordSymbol}". Defaulting to major triad.`);
                         formulaIntervals = CHORD_FORMULAS['maj'];
                     }
                 }
@@ -600,13 +630,13 @@ export class MidiGenerator {
                 previousChordVoicing = [...currentChordVoicing]; // Update previous for next iteration's smoothing
 
             } catch (error: any) {
-                console.error(`Error processing chord "${symbol}": ${error.message}.`);
+                console.error(`Error processing chord "${chordSymbol}" in entry "${entry}": ${error.message}.`);
                 previousChordVoicing = null;
                 // chordData remains isValid = false
             }
 
             generatedChords.push(chordData);
-            currentTick += chordDurationTicks;
+            currentTick += currentChordDurationTicks;
         } // End Step 1 loop
 
 

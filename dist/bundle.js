@@ -1317,31 +1317,53 @@
           }
           return midiVal;
         }
-        getDurationTicks(durationCode) {
-          switch (durationCode) {
-            case "16":
+        /**
+         * Converts a duration input string (bars, letter codes, or T-codes) to MIDI ticks.
+         * @param durationInput - The duration string (e.g., "0.5", "1", "q", "8", "T128").
+         *                        If undefined or empty, defaults to 1 bar.
+         * @returns The duration in MIDI ticks.
+         */
+        getDurationTicks(durationInput) {
+          const beatsPerBar = 4;
+          if (!durationInput || durationInput.trim() === "") {
+            return TPQN * beatsPerBar;
+          }
+          const input = durationInput.trim();
+          const numericBarValue = parseFloat(input);
+          if (!isNaN(numericBarValue) && numericBarValue > 0) {
+            return TPQN * beatsPerBar * numericBarValue;
+          }
+          switch (input.toLowerCase()) {
+            case "0.25":
               return TPQN / 4;
-            case "8":
+            // 0.25 bars
+            case "0.5":
               return TPQN / 2;
-            case "d4":
-              return TPQN * 1.5;
-            case "4":
+            // 0.5 bars
+            case "0.75":
+              return TPQN * 0.75;
+            // 0.75 bars
+            case "1":
               return TPQN;
-            case "d2":
-              return TPQN * 3;
+            // 1 bar
+            case "1.5":
+              return TPQN * 1.5;
+            // 1.5 bars
             case "2":
               return TPQN * 2;
-            case "1":
+            // 2 bars
+            case "3":
+              return TPQN * 3;
+            // 3 bars
+            case "4":
               return TPQN * 4;
-            case "T1024":
-              return 1024;
-            case "T1536":
-              return 1536;
-            case "T2048":
-              return 2048;
+            // 4 bars
             default:
-              console.warn(`Unknown duration code: ${durationCode}. Defaulting to quarter note (${TPQN} ticks).`);
-              return TPQN;
+              if (/^t\d+$/i.test(input)) {
+                return parseInt(input.substring(1), 10);
+              }
+              console.warn(`Unknown duration: "${input}". Defaulting to 1 bar (${TPQN * beatsPerBar} ticks).`);
+              return TPQN * beatsPerBar;
           }
         }
         /**
@@ -1500,23 +1522,26 @@
           if (outputFileName) {
             finalFileName = outputFileName.endsWith(".mid") ? outputFileName : `${outputFileName}.mid`;
           } else {
-            const sanitizedProgressionString = progressionString.replace(/\s+/g, "_");
+            const sanitizedProgressionString = progressionString.replace(/\s+/g, "_").replace(/:/g, "-");
             finalFileName = `${sanitizedProgressionString}_${String(outputType)}_${String(inversionType)}.mid`;
           }
-          const chordDurationTicks = this.getDurationTicks(chordDurationStr);
-          const chordSymbols = progressionString.trim().split(/\s+/);
+          const chordEntries = progressionString.trim().split(/\s+/);
           const chordRegex = /^([A-G][#b]?)(.*)$/;
           const generatedChords = [];
           let currentTick = 0;
           let previousChordVoicing = null;
           let previousBassNote = null;
-          for (const symbol of chordSymbols) {
-            if (!symbol) continue;
-            const match = symbol.match(chordRegex);
+          for (const entry of chordEntries) {
+            if (!entry) continue;
+            const parts = entry.split(":");
+            const chordSymbol = parts[0];
+            const durationString = parts.length > 1 ? parts[1] : chordDurationStr;
+            const currentChordDurationTicks = this.getDurationTicks(durationString);
+            const match = chordSymbol.match(chordRegex);
             let chordData = {
-              symbol,
+              symbol: chordSymbol,
               startTimeTicks: currentTick,
-              durationTicks: chordDurationTicks,
+              durationTicks: currentChordDurationTicks,
               initialVoicing: [],
               adjustedVoicing: [],
               rootNoteName: "",
@@ -1525,9 +1550,9 @@
               // Initialize bass note
             };
             if (!match) {
-              console.warn(`Could not parse chord symbol: "${symbol}". Skipping.`);
+              console.warn(`Could not parse chord symbol: "${chordSymbol}" in entry "${entry}". Skipping.`);
               generatedChords.push(chordData);
-              currentTick += chordDurationTicks;
+              currentTick += currentChordDurationTicks;
               previousChordVoicing = null;
               continue;
             }
@@ -1542,7 +1567,7 @@
                   formulaIntervals = CHORD_FORMULAS["maj"];
                   qualityAndExtensions = "maj";
                 } else {
-                  console.warn(`Chord quality "${qualityAndExtensions}" not found for "${symbol}". Defaulting to major triad.`);
+                  console.warn(`Chord quality "${qualityAndExtensions}" not found for "${chordSymbol}". Defaulting to major triad.`);
                   formulaIntervals = CHORD_FORMULAS["maj"];
                 }
               }
@@ -1615,11 +1640,11 @@
               chordData.isValid = true;
               previousChordVoicing = [...currentChordVoicing];
             } catch (error) {
-              console.error(`Error processing chord "${symbol}": ${error.message}.`);
+              console.error(`Error processing chord "${chordSymbol}" in entry "${entry}": ${error.message}.`);
               previousChordVoicing = null;
             }
             generatedChords.push(chordData);
-            currentTick += chordDurationTicks;
+            currentTick += currentChordDurationTicks;
           }
           let finalVoicings;
           if (inversionType === "none" || inversionType === "first") {
@@ -2111,18 +2136,50 @@
         static generateModalHTML() {
           const chordEntries = Object.entries(CHORD_FORMULAS);
           let modalContent = '<div class="modal" id="chordInfoModal" tabindex="-1">';
-          modalContent += '<div class="modal-dialog modal-lg">';
+          modalContent += '<div class="modal-dialog modal-lg modal-dialog-scrollable">';
           modalContent += '<div class="modal-content">';
           modalContent += '<div class="modal-header">';
-          modalContent += '<h5 class="modal-title">Known Chord Formulas</h5>';
+          modalContent += '<h5 class="modal-title">Chord & Duration Information</h5>';
           modalContent += '<button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>';
           modalContent += "</div>";
           modalContent += '<div class="modal-body">';
-          modalContent += '<ul class="list-group">';
+          modalContent += "<h5>Chord Durations</h5>";
+          modalContent += "<p>Any positive decimal number is accepted (e.g., 0.33, 2.25, etc.). The value represents bars.</p>";
+          modalContent += '<table class="table table-bordered">';
+          modalContent += "<thead><tr><th>Code</th><th>Description</th></tr></thead>";
+          modalContent += "<tbody>";
+          modalContent += "<tr><td><code>0.25</code></td><td>Quarter of a bar (e.g., sixteenth note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>0.5</code></td><td>Half a bar (e.g., eighth note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>0.75</code></td><td>Three-quarters of a bar (e.g., dotted eighth note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>1</code></td><td>One bar (e.g., quarter note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>1.5</code></td><td>One and a half bars (e.g., dotted quarter note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>2</code></td><td>Two bars (e.g., half note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>3</code></td><td>Three bars (e.g., dotted half note in 4/4)</td></tr>";
+          modalContent += "<tr><td><code>4</code></td><td>Four bars (e.g., whole note in 4/4)</td></tr>";
+          modalContent += "</tbody>";
+          modalContent += "</table>";
+          modalContent += "<p><strong>Advanced:</strong> Use absolute ticks for precise timing. Prepend with <code>T</code> (e.g., <code>T128</code> for a quarter note).</p>";
+          modalContent += '<table class="table table-bordered">';
+          modalContent += "<thead><tr><th>Code</th><th>Description</th><th>Ticks</th></tr></thead>";
+          modalContent += "<tbody>";
+          modalContent += `<tr><td><code>T${TPQN / 4}</code></td><td>Sixteenth note</td><td>${TPQN / 4}</td></tr>`;
+          modalContent += `<tr><td><code>T${TPQN / 2}</code></td><td>Eighth note</td><td>${TPQN / 2}</td></tr>`;
+          modalContent += `<tr><td><code>T${TPQN}</code></td><td>Quarter note</td><td>${TPQN}</td></tr>`;
+          modalContent += `<tr><td><code>T${TPQN * 2}</code></td><td>Half note</td><td>${TPQN * 2}</code></td></tr>`;
+          modalContent += `<tr><td><code>T${TPQN * 4}</code></td><td>Whole note</td><td>${TPQN * 4}</td></tr>`;
+          modalContent += "</tbody>";
+          modalContent += "</table>";
+          modalContent += "<hr>";
+          modalContent += "<h5>Known Chord Qualities</h5>";
+          modalContent += "<p>The following chord qualities are recognized (case-insensitive). Chord symbols are generally <code>[RootNote][Quality]</code> (e.g., C, Cm, Cmaj7, Gsus, F#dim7). Root notes can be A-G, optionally followed by # (sharp) or b (flat).</p>";
+          modalContent += '<table class="table table-bordered">';
+          modalContent += "<thead><tr><th>Quality</th><th>Intervals</th></tr></thead>";
+          modalContent += "<tbody>";
           chordEntries.forEach(([chord, formula]) => {
-            modalContent += `<li class="list-group-item"><strong>${chord || "Major"}:</strong> ${formula.join(", ")}</li>`;
+            modalContent += `<tr><td><strong>${chord || "Major"}</strong></td><td>${formula.join(", ")}</td></tr>`;
           });
-          modalContent += "</ul>";
+          modalContent += "</tbody>";
+          modalContent += "</table>";
           modalContent += "</div>";
           modalContent += '<div class="modal-footer">';
           modalContent += '<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>';
@@ -2234,17 +2291,54 @@
           const qualitiesPattern = Object.keys(CHORD_FORMULAS).filter((q) => q).map((q) => q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length).join("|");
           return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?$`, "i");
         }
+        const VALID_DURATION_CODES = [
+          "w",
+          "1",
+          "h",
+          "2",
+          "dh",
+          "d2",
+          "q",
+          "4",
+          "dq",
+          "d4",
+          "e",
+          "8",
+          "de",
+          "d8",
+          "s",
+          "16"
+        ];
         function validateChordProgression(progression) {
           const normalizedProgression = progression.replace(/\|/g, " ").replace(/->/g, " ").replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
-          const chords = normalizedProgression.split(/\s+/);
-          const validChordPattern = generateValidChordPattern();
-          for (const chord of chords) {
-            if (!chord) continue;
-            if (!validChordPattern.test(chord)) {
-              throw new Error(`Invalid chord format or unknown quality detected: "${chord}". Please use formats like C, Cm, G7, Bbmaj7.`);
+          if (!normalizedProgression) {
+            return "";
+          }
+          const chordEntries = normalizedProgression.split(/\s+/);
+          const validChordSymbolPattern = generateValidChordPattern();
+          const validatedEntries = [];
+          for (const entry of chordEntries) {
+            if (!entry) continue;
+            const parts = entry.split(":");
+            const chordSymbol = parts[0];
+            const durationStr = parts.length > 1 ? parts[1] : void 0;
+            if (!validChordSymbolPattern.test(chordSymbol)) {
+              throw new Error(`Invalid chord symbol: "${chordSymbol}" in entry "${entry}". Use formats like C, Cm, G7.`);
+            }
+            if (durationStr !== void 0) {
+              const numericDuration = parseFloat(durationStr);
+              const isValidNumeric = !isNaN(numericDuration) && numericDuration > 0;
+              const isKnownCode = VALID_DURATION_CODES.includes(durationStr.toLowerCase());
+              const isTCode = /^t\d+$/i.test(durationStr);
+              if (!isValidNumeric && !isKnownCode && !isTCode) {
+                throw new Error(`Invalid duration: "${durationStr}" for chord "${chordSymbol}". Use beats (e.g., 0.5, 1), codes (e.g., q, 8, d4), or T-codes (e.g., T128).`);
+              }
+              validatedEntries.push(`${chordSymbol}:${durationStr}`);
+            } else {
+              validatedEntries.push(chordSymbol);
             }
           }
-          return normalizedProgression;
+          return validatedEntries.join(" ");
         }
         const handleGeneration = (isDownloadOnly) => {
           const actionText = isDownloadOnly ? "Generating MIDI file" : "Generating preview and MIDI";
@@ -2272,8 +2366,8 @@
             const chordDetails = generationResult.chordDetails;
             console.log("Chord Details:", chordDetails);
             lastGeneratedMidiBlob = generationResult.midiBlob;
-            const progressionChords = validatedProgression.split(" ");
-            pianoRollDrawer.renderChordButtons(progressionChords, chordDetails);
+            const progressionChordSymbols = validatedProgression.split(" ").map((entry) => entry.split(":")[0]);
+            pianoRollDrawer.renderChordButtons(progressionChordSymbols, chordDetails);
             if (isDownloadOnly) {
               triggerDownload(generationResult.midiBlob, generationResult.finalFileName);
               statusDiv.textContent = `MIDI file "${generationResult.finalFileName}" download initiated.`;
