@@ -1127,10 +1127,16 @@
         // --- "Add" Chords (Triads + added note, no 7th) ---
         "add2": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M2],
         // Major add 2 (often same sound as add9)
+        "(add2)": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M2],
+        // Alias for add2 with parentheses
         "add4": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P4, INTERVALS.P5],
         // Major add 4
+        "(add4)": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P4, INTERVALS.P5],
+        // Alias for add4 with parentheses
         "add9": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M9],
         // Major add 9
+        "(add9)": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M9],
+        // Alias for add9 with parentheses
         "m(add2)": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.M2],
         // Minor add 2
         "m(add4)": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P4, INTERVALS.P5],
