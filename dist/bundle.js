@@ -1125,16 +1125,39 @@
         // --- Power Chord ---
         "5": [INTERVALS.P1, INTERVALS.P5],
         // --- "Add" Chords (Triads + added note, no 7th) ---
-        "add9": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M9],
-        // Major add 9
         "add2": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M2],
         // Major add 2 (often same sound as add9)
-        "m(add9)": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.M9],
-        // Minor add 9
-        "madd9": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.M9],
-        // Alias for m(add9)
+        "add4": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P4, INTERVALS.P5],
+        // Major add 4
+        "add9": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M9],
+        // Major add 9
         "m(add2)": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.M2],
         // Minor add 2
+        "m(add4)": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P4, INTERVALS.P5],
+        // Minor add 4
+        "m(add9)": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.M9],
+        // Minor add 9
+        "madd2": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.M2],
+        // Alias for m(add2)
+        "madd9": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.M9],
+        // Alias for m(add9)
+        // --- Popular additional chords ---
+        "sus2add9": [INTERVALS.P1, INTERVALS.M2, INTERVALS.P5, INTERVALS.M9],
+        // Sus2 with added 9th
+        "m7add11": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.m7, INTERVALS.P11],
+        // Minor 7th add 11
+        "maj7add13": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M7, INTERVALS.M13],
+        // Major 7th add 13
+        "7b13": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.m13],
+        // Dominant 7th flat 13
+        "7sus2": [INTERVALS.P1, INTERVALS.M2, INTERVALS.P5, INTERVALS.m7],
+        // Dominant 7th sus2
+        "7sus2sus4": [INTERVALS.P1, INTERVALS.M2, INTERVALS.P4, INTERVALS.P5, INTERVALS.m7],
+        // Dominant 7th sus2sus4
+        "7#11": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.m7, INTERVALS.A4],
+        // Dominant 7th sharp 11
+        "mMaj9": [INTERVALS.P1, INTERVALS.m3, INTERVALS.P5, INTERVALS.M7, INTERVALS.M9],
+        // Alias for m(maj9)
         // --- Sixth Chords ---
         "6": [INTERVALS.P1, INTERVALS.M3, INTERVALS.P5, INTERVALS.M6],
         // Major 6th
