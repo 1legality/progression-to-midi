@@ -3,7 +3,7 @@ import { PianoRollDrawer } from './PianoRollDrawer';
 import { SynthChordPlayer, ActiveNote } from './SynthChordPlayer';
 import { ChordInfoModal } from './ChordInfoModal';
 
-// Keep NoteData interface accessible if needed by main.ts directly
+// Keep NoteData interface accessible if needed by Main.ts directly
 interface NoteData {
     midiNote: number;
     startTimeTicks: number;
