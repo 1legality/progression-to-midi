@@ -1542,7 +1542,9 @@
             baseOctave,
             chordDurationStr,
             tempo,
-            velocity
+            velocity,
+            totalSteps
+            // <-- Add this for step sequencer
           } = options;
           if (!progressionString || progressionString.trim() === "") {
             throw new Error("Chord progression cannot be empty.");
@@ -1578,6 +1580,11 @@
               events.push({ midiNote, startStep: pos, length: len, velocity: vel });
               if (pos + len > maxStep) maxStep = pos + len;
             }
+            if (options.totalSteps && options.totalSteps > maxStep) {
+              maxStep = options.totalSteps;
+            } else if (maxStep < 16) {
+              maxStep = 16;
+            }
             const stepMap = {};
             for (const ev of events) {
               for (let i = 0; i < ev.length; ++i) {
@@ -1592,26 +1599,33 @@
             track2.setTempo(tempo);
             track2.setTimeSignature(4, 4, 24, 8);
             const notesForPianoRoll2 = [];
+            let waitSteps = 0;
             for (let step = 0; step < maxStep; ++step) {
               const eventsAtStep = stepMap[step] || [];
               if (eventsAtStep.length > 0) {
-                const midiNotes = eventsAtStep.map((ev) => ev.midiNote);
+                const pitches = eventsAtStep.map((ev) => ev.midiNote);
                 const velocities = eventsAtStep.map((ev) => ev.velocity);
-                track2.addEvent(new import_midi_writer_js.default.NoteEvent({
-                  pitch: midiNotes,
+                const velocity2 = velocities.length > 0 ? Math.max(...velocities) : 100;
+                const noteEventOptions = {
+                  pitch: pitches,
                   duration: "T" + stepTicks,
-                  velocity: velocities[0] || velocity
-                }));
-                midiNotes.forEach((midiNote, idx) => {
+                  velocity: velocity2
+                };
+                if (waitSteps > 0) {
+                  noteEventOptions.wait = "T" + waitSteps * stepTicks;
+                  waitSteps = 0;
+                }
+                track2.addEvent(new import_midi_writer_js.default.NoteEvent(noteEventOptions));
+                eventsAtStep.forEach((ev) => {
                   notesForPianoRoll2.push({
-                    midiNote,
+                    midiNote: ev.midiNote,
                     startTimeTicks: step * stepTicks,
                     durationTicks: stepTicks,
-                    velocity: velocities[idx] || velocity
+                    velocity: ev.velocity
                   });
                 });
               } else {
-                track2.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + stepTicks, duration: "T0", velocity: 0 }));
+                waitSteps++;
               }
             }
             const writer2 = new import_midi_writer_js.default.Writer([track2]);
@@ -2608,11 +2622,13 @@
       return;
     }
     let notesForPianoRoll = [];
+    let events = [];
+    let maxStep = 0;
     function parseNoteSequenceInput() {
       sequencer = new StepSequencer(Number(stepsInput.value) || 16);
       const lines = noteSequenceInput.value.split(/\n|\r/).map((l) => l.trim()).filter(Boolean);
-      let events = [];
-      let maxStep = 0;
+      events = [];
+      maxStep = 0;
       for (const line of lines) {
         const parts = line.split(":");
         let note = "C4";
@@ -2670,14 +2686,28 @@
       pianoRollDrawer.draw(notesForPianoRoll);
     }
     function stepsToProgressionString() {
+      const stepMap = {};
+      for (const ev of events) {
+        if (!stepMap[ev.startStep]) stepMap[ev.startStep] = [];
+        stepMap[ev.startStep].push(ev);
+      }
+      const totalSteps = Number(stepsInput.value) || 16;
       let progression = [];
-      for (let i = 0; i < sequencer.stepCount; ++i) {
-        const step = sequencer.steps[i];
-        if (step.active) {
-          progression.push(`${step.note}:P${i + 1}:L1:V${step.velocity}`);
+      for (let i = 0; i < totalSteps; ++i) {
+        const evs = stepMap[i] || [];
+        if (evs.length > 0) {
+          evs.forEach((ev) => {
+            progression.push(`${getNoteNameFromMidi(ev.midiNote)}:P${i + 1}:L${ev.length}:V${ev.velocity}`);
+          });
         }
       }
       return progression.join(" ");
+    }
+    function getNoteNameFromMidi(midiNote) {
+      const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+      const note = noteNames[midiNote % 12];
+      const octave = Math.floor(midiNote / 12) - 1;
+      return `${note}${octave}`;
     }
     function handleDownload() {
       try {
@@ -2695,7 +2725,9 @@
           baseOctave: 4,
           chordDurationStr: void 0,
           tempo: Number(tempoInput.value) || 120,
-          velocity: 100
+          velocity: 100,
+          totalSteps: Number(stepsInput.value) || 16
+          // Pass total steps from UI
         };
         const result = midiGenerator.generate(options);
         const blob = result.midiBlob;

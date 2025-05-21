@@ -179,6 +179,7 @@ export interface MidiGenerationOptions {
     chordDurationStr?: string; // Optional, provide default
     tempo: number;
     velocity: number;
+    totalSteps?: number; // <-- Add this for step sequencer
 }
 
 export interface MidiGenerationResult {
@@ -484,7 +485,8 @@ export class MidiGenerator {
             baseOctave,
             chordDurationStr,
             tempo,
-            velocity
+            velocity,
+            totalSteps // <-- Add this for step sequencer
         } = options;
 
         if (!progressionString || progressionString.trim() === '') {
@@ -501,10 +503,7 @@ export class MidiGenerator {
 
         // --- Special handling for notesOnly mode ---
         if (outputType === 'notesOnly') {
-            // Each entry: note:duration (e.g. C4:0.25), optionally with :V# for velocity
-            // Allow multiple notes at the same start time (for drum loops)
-            // We'll parse as: note:P#:L#:V# (P=step, L=length, V=velocity)
-            // But for now, assume progressionString is space-separated note events
+            // Each entry: note:P#:L#:V# (e.g. C4:P1:L1:V100)
             const noteEntries = progressionString.trim().split(/\s+/);
             interface NoteEvent { midiNote: number; startStep: number; length: number; velocity: number; }
             const events: NoteEvent[] = [];
@@ -530,6 +529,12 @@ export class MidiGenerator {
                 events.push({ midiNote, startStep: pos, length: len, velocity: vel });
                 if (pos + len > maxStep) maxStep = pos + len;
             }
+            // --- Use totalSteps if provided, else fallback to maxStep or 16 ---
+            if (options.totalSteps && options.totalSteps > maxStep) {
+                maxStep = options.totalSteps;
+            } else if (maxStep < 16) {
+                maxStep = 16;
+            }
             // Group events by step for simultaneity
             const stepMap: Record<number, NoteEvent[]> = {};
             for (const ev of events) {
@@ -546,28 +551,33 @@ export class MidiGenerator {
             track.setTempo(tempo);
             track.setTimeSignature(4, 4, 24, 8);
             const notesForPianoRoll: NoteData[] = [];
+            let waitSteps = 0;
             for (let step = 0; step < maxStep; ++step) {
                 const eventsAtStep = stepMap[step] || [];
                 if (eventsAtStep.length > 0) {
-                    const midiNotes = eventsAtStep.map(ev => ev.midiNote);
+                    const pitches = eventsAtStep.map(ev => ev.midiNote);
                     const velocities = eventsAtStep.map(ev => ev.velocity);
-                    // Use the first velocity for all notes (MIDI limitation)
-                    track.addEvent(new midiWriterJs.NoteEvent({
-                        pitch: midiNotes,
+                    const velocity = velocities.length > 0 ? Math.max(...velocities) : 100;
+                    const noteEventOptions: any = {
+                        pitch: pitches,
                         duration: 'T' + stepTicks,
-                        velocity: velocities[0] || velocity
-                    }));
-                    midiNotes.forEach((midiNote, idx) => {
+                        velocity: velocity
+                    };
+                    if (waitSteps > 0) {
+                        noteEventOptions.wait = 'T' + (waitSteps * stepTicks);
+                        waitSteps = 0;
+                    }
+                    track.addEvent(new midiWriterJs.NoteEvent(noteEventOptions));
+                    eventsAtStep.forEach(ev => {
                         notesForPianoRoll.push({
-                            midiNote,
+                            midiNote: ev.midiNote,
                             startTimeTicks: step * stepTicks,
                             durationTicks: stepTicks,
-                            velocity: velocities[idx] || velocity
+                            velocity: ev.velocity
                         });
                     });
                 } else {
-                    // Rest
-                    track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + stepTicks, duration: 'T0', velocity: 0 }));
+                    waitSteps++;
                 }
             }
             const writer = new midiWriterJs.Writer([track]);

@@ -79,12 +79,14 @@ export function setupStepSequencerUI() {
         return;
     }
     let notesForPianoRoll: any[] = [];
+    let events: { midiNote: number; startStep: number; length: number; velocity: number }[] = [];
+    let maxStep = 0;
 
     function parseNoteSequenceInput(): void {
         sequencer = new StepSequencer(Number(stepsInput!.value) || 16);
         const lines = noteSequenceInput!.value.split(/\n|\r/).map(l => l.trim()).filter(Boolean);
-        let events: { midiNote: number; startStep: number; length: number; velocity: number }[] = [];
-        let maxStep = 0;
+        events = [];
+        maxStep = 0;
         for (const line of lines) {
             const parts = line.split(':');
             let note = 'C4';
@@ -147,20 +149,34 @@ export function setupStepSequencerUI() {
     }
 
     function stepsToProgressionString(): string {
-        // For each step, collect all notes that are active at that step (for simultaneity)
-        let progression: string[] = [];
-        for (let i = 0; i < sequencer.stepCount; ++i) {
-            const step = sequencer.steps[i];
-            if (step.active) {
-                // If multiple notes per step are possible, they should be stored in an array per step
-                // But in this implementation, each step only has one note. So, to allow multiple notes per step,
-                // you would need to extend the Step structure. For now, we assume one note per step.
-                progression.push(`${step.note}:P${i+1}:L1:V${step.velocity}`);
-            }
+        // Build progression string from parsed events, not from Step array
+        // Only output real notes, skip dummy rest notes for empty steps
+        const stepMap: Record<number, typeof events> = {};
+        for (const ev of events) {
+            if (!stepMap[ev.startStep]) stepMap[ev.startStep] = [];
+            stepMap[ev.startStep].push(ev);
         }
-        // Also parse the noteSequenceInput for any additional notes at the same step (for simultaneity)
-        // This is already handled in parseNoteSequenceInput and the progression string is built accordingly.
+        const totalSteps = Number(stepsInput!.value) || 16;
+        let progression: string[] = [];
+        for (let i = 0; i < totalSteps; ++i) {
+            const evs = stepMap[i] || [];
+            if (evs.length > 0) {
+                // Output all notes at this step as separate entries (for simultaneity)
+                evs.forEach(ev => {
+                    progression.push(`${getNoteNameFromMidi(ev.midiNote)}:P${i+1}:L${ev.length}:V${ev.velocity}`);
+                });
+            }
+            // No dummy note for empty steps!
+        }
         return progression.join(' ');
+    }
+
+    function getNoteNameFromMidi(midiNote: number): string {
+        // Convert MIDI note number back to note name and octave (e.g., 36 -> C2)
+        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const note = noteNames[midiNote % 12];
+        const octave = Math.floor(midiNote / 12) - 1;
+        return `${note}${octave}`;
     }
 
     function handleDownload() {
@@ -179,7 +195,8 @@ export function setupStepSequencerUI() {
                 baseOctave: 4,
                 chordDurationStr: undefined,
                 tempo: Number(tempoInput!.value) || 120,
-                velocity: 100
+                velocity: 100,
+                totalSteps: Number(stepsInput!.value) || 16 // Pass total steps from UI
             };
             const result = midiGenerator.generate(options);
             const blob = result.midiBlob;
