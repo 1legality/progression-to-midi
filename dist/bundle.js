@@ -2515,14 +2515,186 @@
     }
   });
 
+  // StepSequencer.ts
+  function setupStepSequencerUI() {
+    const form = document.getElementById("sequencerForm");
+    const statusDiv = document.getElementById("status");
+    const stepsInput = document.getElementById("steps");
+    const tempoInput = document.getElementById("tempo");
+    const noteSequenceInput = document.getElementById("noteSequence");
+    const outputFileNameInput = document.getElementById("outputFileName");
+    const downloadMidiButton = document.getElementById("downloadMidiButton");
+    const stepGridCanvas = document.getElementById("stepGridCanvas");
+    if (!form || !statusDiv || !stepsInput || !tempoInput || !noteSequenceInput || !outputFileNameInput || !downloadMidiButton || !stepGridCanvas) {
+      if (statusDiv) statusDiv.textContent = "Error: Could not initialize the step sequencer (missing elements).";
+      return;
+    }
+    let sequencer = new StepSequencer(Number(stepsInput.value) || 16);
+    const midiGenerator = new MidiGenerator();
+    function parseNoteSequenceInput() {
+      sequencer = new StepSequencer(Number(stepsInput.value) || 16);
+      const lines = noteSequenceInput.value.split(/\n|\r/).map((l) => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        const parts = line.split(":");
+        let note = "C4";
+        let pos = 0;
+        let len = 1;
+        let vel = 100;
+        for (const part of parts) {
+          if (/^[A-G][#b]?\d+$|^\d+$/.test(part)) note = part;
+          else if (/^P(\d+)$/i.test(part)) pos = parseInt(part.slice(1), 10) - 1;
+          else if (/^L(\d+)$/i.test(part)) len = parseInt(part.slice(1), 10);
+          else if (/^V(\d+)$/i.test(part)) vel = parseInt(part.slice(1), 10);
+        }
+        for (let i = 0; i < len; ++i) {
+          const idx = pos + i;
+          if (idx >= 0 && idx < sequencer.stepCount) {
+            sequencer.steps[idx].active = true;
+            sequencer.steps[idx].note = note;
+            sequencer.steps[idx].velocity = vel;
+          }
+        }
+      }
+    }
+    function drawStepGrid() {
+      const ctx = stepGridCanvas.getContext("2d");
+      if (!ctx) return;
+      const w = stepGridCanvas.width = stepGridCanvas.offsetWidth;
+      const h = stepGridCanvas.height = 60;
+      const stepW = w / sequencer.stepCount;
+      ctx.clearRect(0, 0, w, h);
+      for (let i = 0; i < sequencer.stepCount; ++i) {
+        ctx.fillStyle = sequencer.steps[i].active ? "#0d6efd" : "#e9ecef";
+        ctx.fillRect(i * stepW, 0, stepW - 2, h);
+        ctx.strokeStyle = "#adb5bd";
+        ctx.strokeRect(i * stepW, 0, stepW - 2, h);
+        if (sequencer.steps[i].active) {
+          ctx.fillStyle = "#fff";
+          ctx.font = "bold 12px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(sequencer.steps[i].note, i * stepW + stepW / 2, h / 2);
+        }
+      }
+    }
+    function stepsToProgressionString() {
+      const stepsPerBar = 4;
+      const stepDuration = 1 / stepsPerBar;
+      let progression = [];
+      for (let i = 0; i < sequencer.stepCount; ++i) {
+        const step = sequencer.steps[i];
+        if (step.active) {
+          progression.push(`${step.note}:${stepDuration}`);
+        }
+      }
+      return progression.join(" ");
+    }
+    function handleDownload() {
+      try {
+        const progressionString = stepsToProgressionString();
+        if (!progressionString) {
+          statusDiv.textContent = "No active steps to export.";
+          statusDiv.className = "mt-4 text-center text-danger";
+          return;
+        }
+        const options = {
+          progressionString,
+          outputFileName: outputFileNameInput.value || "sequence.mid",
+          outputType: "chordsOnly",
+          inversionType: "none",
+          baseOctave: 4,
+          chordDurationStr: void 0,
+          tempo: Number(tempoInput.value) || 120,
+          velocity: 100
+        };
+        const result = midiGenerator.generate(options);
+        const blob = result.midiBlob;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = result.finalFileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        statusDiv.textContent = `MIDI file "${result.finalFileName}" download initiated.`;
+        statusDiv.className = "mt-4 text-center text-success";
+      } catch (err) {
+        statusDiv.textContent = "Error: " + (err.message || "Failed to generate MIDI.");
+        statusDiv.className = "mt-4 text-center text-danger";
+      }
+    }
+    stepsInput.addEventListener("change", () => {
+      sequencer = new StepSequencer(Number(stepsInput.value) || 16);
+      parseNoteSequenceInput();
+      drawStepGrid();
+    });
+    noteSequenceInput.addEventListener("input", () => {
+      parseNoteSequenceInput();
+      drawStepGrid();
+    });
+    downloadMidiButton.addEventListener("click", (e) => {
+      e.preventDefault();
+      parseNoteSequenceInput();
+      drawStepGrid();
+      handleDownload();
+    });
+    parseNoteSequenceInput();
+    drawStepGrid();
+    statusDiv.textContent = "Enter notes and click Download.";
+  }
+  var StepSequencer;
+  var init_StepSequencer = __esm({
+    "StepSequencer.ts"() {
+      "use strict";
+      init_MidiGenerator();
+      StepSequencer = class {
+        constructor(stepCount = 16) {
+          this.stepCount = stepCount;
+          this.steps = Array.from({ length: stepCount }, () => ({ active: false, note: "C4", velocity: 100 }));
+          this.currentStep = 0;
+        }
+        toggleStep(index) {
+          if (index >= 0 && index < this.stepCount) {
+            this.steps[index].active = !this.steps[index].active;
+          }
+        }
+        setStepNote(index, note) {
+          if (index >= 0 && index < this.stepCount) {
+            this.steps[index].note = note;
+          }
+        }
+        setStepVelocity(index, velocity) {
+          if (index >= 0 && index < this.stepCount) {
+            this.steps[index].velocity = velocity;
+          }
+        }
+        nextStep() {
+          this.currentStep = (this.currentStep + 1) % this.stepCount;
+          return this.currentStep;
+        }
+        reset() {
+          this.currentStep = 0;
+        }
+      };
+    }
+  });
+
   // Main.ts
   var require_Main = __commonJS({
     "Main.ts"() {
       init_ChordProgressionSequencer();
+      init_StepSequencer();
+      function runAppInit() {
+        if (document.getElementById("midiForm")) {
+          setupChordProgressionSequencer();
+        } else if (document.getElementById("sequencerForm")) {
+          setupStepSequencerUI();
+        }
+      }
       if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", setupChordProgressionSequencer);
+        document.addEventListener("DOMContentLoaded", runAppInit);
       } else {
-        setupChordProgressionSequencer();
+        runAppInit();
       }
     }
   });
