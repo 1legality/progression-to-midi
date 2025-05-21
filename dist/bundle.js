@@ -2228,296 +2228,304 @@
     }
   });
 
-  // main.ts
-  var require_main = __commonJS({
-    "main.ts"() {
+  // ChordProgressionSequencer.ts
+  function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+  function setupChordProgressionSequencer() {
+    const form = document.getElementById("midiForm");
+    const statusDiv = document.getElementById("status");
+    const velocitySlider = document.getElementById("velocity");
+    const velocityValueSpan = document.getElementById("velocityValue");
+    const pianoRollCanvas = document.getElementById("pianoRollCanvas");
+    const downloadMidiOnlyButton = document.getElementById("downloadMidiOnlyButton");
+    const chordIndicator = document.getElementById("chordIndicator");
+    if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton) {
+      console.error("One or more required HTML elements not found!");
+      if (statusDiv) statusDiv.textContent = "Error: Could not initialize the application (missing elements).";
+      return;
+    }
+    let pianoRollDrawer;
+    try {
+      pianoRollDrawer = new PianoRollDrawer(pianoRollCanvas);
+    } catch (error) {
+      console.error("Failed to initialize PianoRollDrawer:", error);
+      if (statusDiv) {
+        statusDiv.textContent = `Error: Canvas setup failed - ${error.message}`;
+        statusDiv.classList.add("text-danger");
+      }
+      pianoRollCanvas.style.border = "2px solid red";
+      return;
+    }
+    const midiGenerator = new MidiGenerator();
+    const synthChordPlayer = new SynthChordPlayer();
+    let lastGeneratedResult = null;
+    let lastGeneratedNotes = [];
+    let lastGeneratedMidiBlob = null;
+    const resumeAudioContext = () => synthChordPlayer.ensureContextResumed();
+    document.addEventListener("click", resumeAudioContext, { once: true });
+    velocitySlider.addEventListener("input", (event) => {
+      velocityValueSpan.textContent = event.target.value;
+    });
+    const updateChordIndicator = (chord) => {
+      if (chordIndicator) {
+        chordIndicator.textContent = `Playing: ${chord}`;
+        chordIndicator.classList.add("text-primary");
+        setTimeout(() => {
+          chordIndicator.textContent = "";
+          chordIndicator.classList.remove("text-primary");
+        }, 2e3);
+      }
+    };
+    const ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION = [
+      "C",
+      "C#",
+      "Db",
+      "D",
+      "D#",
+      "Eb",
+      "E",
+      "Fb",
+      // E flat is Eb, F flat is E
+      "F",
+      "F#",
+      "Gb",
+      "G",
+      "G#",
+      "Ab",
+      "A",
+      "A#",
+      "Bb",
+      "B",
+      "Cb"
+      // C flat is B
+      // We don't strictly need E# or B# here as users rarely input them,
+      // and MidiGenerator normalizes them anyway if they somehow get through.
+    ];
+    function generateValidChordPattern() {
+      const notePattern = ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION.join("|");
+      const qualitiesPattern = Object.keys(CHORD_FORMULAS).filter((q) => q).map((q) => q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length).join("|");
+      return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?$`, "i");
+    }
+    const VALID_DURATION_CODES = [
+      "w",
+      "1",
+      "h",
+      "2",
+      "dh",
+      "d2",
+      "q",
+      "4",
+      "dq",
+      "d4",
+      "e",
+      "8",
+      "de",
+      "d8",
+      "s",
+      "16"
+    ];
+    function validateChordProgression(progression) {
+      const normalizedProgression = progression.replace(/\|/g, " ").replace(/->/g, " ").replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
+      if (!normalizedProgression) {
+        return "";
+      }
+      const chordEntries = normalizedProgression.split(/\s+/);
+      const validChordSymbolPattern = generateValidChordPattern();
+      const validatedEntries = [];
+      for (const entry of chordEntries) {
+        if (!entry) continue;
+        const parts = entry.split(":");
+        const chordSymbol = parts[0];
+        const durationStr = parts.length > 1 ? parts[1] : void 0;
+        if (!validChordSymbolPattern.test(chordSymbol)) {
+          throw new Error(`Invalid chord symbol: "${chordSymbol}" in entry "${entry}". Use formats like C, Cm, G7.`);
+        }
+        if (durationStr !== void 0) {
+          const numericDuration = parseFloat(durationStr);
+          const isValidNumeric = !isNaN(numericDuration) && numericDuration > 0;
+          const isKnownCode = VALID_DURATION_CODES.includes(durationStr.toLowerCase());
+          const isTCode = /^t\d+$/i.test(durationStr);
+          if (!isValidNumeric && !isKnownCode && !isTCode) {
+            throw new Error(`Invalid duration: "${durationStr}" for chord "${chordSymbol}". Use beats (e.g., 0.5, 1), codes (e.g., q, 8, d4), or T-codes (e.g., T128).`);
+          }
+          validatedEntries.push(`${chordSymbol}:${durationStr}`);
+        } else {
+          validatedEntries.push(chordSymbol);
+        }
+      }
+      return validatedEntries.join(" ");
+    }
+    const handleGeneration = (isDownloadOnly) => {
+      const actionText = isDownloadOnly ? "Generating MIDI file" : "Generating preview and MIDI";
+      statusDiv.textContent = `${actionText}...`;
+      statusDiv.classList.remove("text-danger", "text-success");
+      statusDiv.classList.add("text-muted");
+      try {
+        const formData = new FormData(form);
+        const rawProgression = formData.get("progression");
+        const validatedProgression = validateChordProgression(rawProgression);
+        const options = {
+          progressionString: validatedProgression,
+          outputFileName: formData.get("outputFileName") || void 0,
+          // Let generator handle default
+          outputType: formData.get("outputType"),
+          inversionType: formData.get("inversionType"),
+          baseOctave: parseInt(formData.get("baseOctave"), 10),
+          chordDurationStr: formData.get("chordDuration"),
+          tempo: parseInt(formData.get("tempo"), 10),
+          velocity: parseInt(formData.get("velocity"), 10)
+        };
+        const generationResult = midiGenerator.generate(options);
+        lastGeneratedResult = generationResult;
+        lastGeneratedNotes = generationResult.notesForPianoRoll;
+        const chordDetails = generationResult.chordDetails;
+        console.log("Chord Details:", chordDetails);
+        lastGeneratedMidiBlob = generationResult.midiBlob;
+        const progressionChordSymbols = validatedProgression.split(" ").map((entry) => entry.split(":")[0]);
+        pianoRollDrawer.renderChordButtons(progressionChordSymbols, chordDetails);
+        if (isDownloadOnly) {
+          triggerDownload(generationResult.midiBlob, generationResult.finalFileName);
+          statusDiv.textContent = `MIDI file "${generationResult.finalFileName}" download initiated.`;
+          statusDiv.classList.replace("text-muted", "text-success");
+        } else {
+          pianoRollDrawer.draw(generationResult.notesForPianoRoll);
+          statusDiv.textContent = `Preview generated.`;
+          statusDiv.classList.replace("text-muted", "text-success");
+        }
+      } catch (error) {
+        console.error(`Error during MIDI generation (${actionText}):`, error);
+        lastGeneratedResult = null;
+        lastGeneratedNotes = [];
+        lastGeneratedMidiBlob = null;
+        statusDiv.textContent = `Error: ${error.message || "Failed to generate MIDI."}`;
+        statusDiv.classList.replace("text-muted", "text-danger");
+        pianoRollDrawer.drawErrorMessage("Error generating preview");
+      }
+    };
+    pianoRollDrawer.renderChordButtons = (chords, chordDetails) => {
+      const buttonContainer = document.getElementById("chordButtonContainer");
+      if (!buttonContainer) {
+        console.error("Chord button container not found!");
+        return;
+      }
+      buttonContainer.innerHTML = "";
+      const activeNotesMap = /* @__PURE__ */ new Map();
+      chords.forEach((chord, index) => {
+        const button = document.createElement("button");
+        button.className = "btn btn-outline-primary m-1";
+        button.textContent = chord;
+        button.addEventListener("mousedown", () => {
+          if (chordDetails && chordDetails[index]) {
+            const midiNotes = chordDetails[index].adjustedVoicing;
+            const activeNotes = synthChordPlayer.startChord(midiNotes);
+            activeNotesMap.set(index, activeNotes);
+          } else {
+            console.warn(`No details available for chord at index ${index}`);
+          }
+        });
+        button.addEventListener("touchstart", (event) => {
+          event.preventDefault();
+          if (chordDetails && chordDetails[index]) {
+            const midiNotes = chordDetails[index].adjustedVoicing;
+            const activeNotes = synthChordPlayer.startChord(midiNotes);
+            activeNotesMap.set(index, activeNotes);
+          } else {
+            console.warn(`No details available for chord at index ${index}`);
+          }
+        });
+        button.addEventListener("mouseup", () => {
+          const activeNotes = activeNotesMap.get(index);
+          if (activeNotes) {
+            synthChordPlayer.stopNotes(activeNotes);
+            activeNotesMap.delete(index);
+          }
+        });
+        button.addEventListener("touchend", (event) => {
+          event.preventDefault();
+          const activeNotes = activeNotesMap.get(index);
+          if (activeNotes) {
+            synthChordPlayer.stopNotes(activeNotes);
+            activeNotesMap.delete(index);
+          }
+        });
+        button.addEventListener("mouseleave", () => {
+          const activeNotes = activeNotesMap.get(index);
+          if (activeNotes) {
+            synthChordPlayer.stopNotes(activeNotes);
+            activeNotesMap.delete(index);
+          }
+        });
+        button.addEventListener("touchcancel", () => {
+          const activeNotes = activeNotesMap.get(index);
+          if (activeNotes) {
+            synthChordPlayer.stopNotes(activeNotes);
+            activeNotesMap.delete(index);
+          }
+        });
+        buttonContainer.appendChild(button);
+      });
+    };
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      handleGeneration(false);
+    });
+    downloadMidiOnlyButton.addEventListener("click", (event) => {
+      event.preventDefault();
+      handleGeneration(true);
+    });
+    const formInputs = form.querySelectorAll("input, select, textarea");
+    formInputs.forEach((input) => {
+      input.addEventListener("change", () => {
+        handleGeneration(false);
+      });
+    });
+    let resizeTimeout;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = window.setTimeout(() => {
+        pianoRollDrawer.resize();
+      }, 100);
+    });
+    statusDiv.textContent = "Enter a progression and click generate.";
+    pianoRollDrawer.draw([]);
+    const helpButton = document.getElementById("helpButton");
+    if (helpButton) {
+      helpButton.addEventListener("click", () => {
+        ChordInfoModal.injectModalIntoDOM();
+        const modal = new window.bootstrap.Modal(document.getElementById("chordInfoModal"));
+        modal.show();
+      });
+    }
+  }
+  var init_ChordProgressionSequencer = __esm({
+    "ChordProgressionSequencer.ts"() {
+      "use strict";
       init_MidiGenerator();
       init_PianoRollDrawer();
       init_SynthChordPlayer();
       init_ChordInfoModal();
-      function triggerDownload(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      }
-      function setupApp() {
-        const form = document.getElementById("midiForm");
-        const statusDiv = document.getElementById("status");
-        const velocitySlider = document.getElementById("velocity");
-        const velocityValueSpan = document.getElementById("velocityValue");
-        const pianoRollCanvas = document.getElementById("pianoRollCanvas");
-        const downloadMidiOnlyButton = document.getElementById("downloadMidiOnlyButton");
-        const chordIndicator = document.getElementById("chordIndicator");
-        if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton) {
-          console.error("One or more required HTML elements not found!");
-          if (statusDiv) statusDiv.textContent = "Error: Could not initialize the application (missing elements).";
-          return;
-        }
-        let pianoRollDrawer;
-        try {
-          pianoRollDrawer = new PianoRollDrawer(pianoRollCanvas);
-        } catch (error) {
-          console.error("Failed to initialize PianoRollDrawer:", error);
-          if (statusDiv) {
-            statusDiv.textContent = `Error: Canvas setup failed - ${error.message}`;
-            statusDiv.classList.add("text-danger");
-          }
-          pianoRollCanvas.style.border = "2px solid red";
-          return;
-        }
-        const midiGenerator = new MidiGenerator();
-        const synthChordPlayer = new SynthChordPlayer();
-        let lastGeneratedResult = null;
-        let lastGeneratedNotes = [];
-        let lastGeneratedMidiBlob = null;
-        const resumeAudioContext = () => synthChordPlayer.ensureContextResumed();
-        document.addEventListener("click", resumeAudioContext, { once: true });
-        velocitySlider.addEventListener("input", (event) => {
-          velocityValueSpan.textContent = event.target.value;
-        });
-        const updateChordIndicator = (chord) => {
-          if (chordIndicator) {
-            chordIndicator.textContent = `Playing: ${chord}`;
-            chordIndicator.classList.add("text-primary");
-            setTimeout(() => {
-              chordIndicator.textContent = "";
-              chordIndicator.classList.remove("text-primary");
-            }, 2e3);
-          }
-        };
-        const ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION = [
-          "C",
-          "C#",
-          "Db",
-          "D",
-          "D#",
-          "Eb",
-          "E",
-          "Fb",
-          // E flat is Eb, F flat is E
-          "F",
-          "F#",
-          "Gb",
-          "G",
-          "G#",
-          "Ab",
-          "A",
-          "A#",
-          "Bb",
-          "B",
-          "Cb"
-          // C flat is B
-          // We don't strictly need E# or B# here as users rarely input them,
-          // and MidiGenerator normalizes them anyway if they somehow get through.
-        ];
-        function generateValidChordPattern() {
-          const notePattern = ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION.join("|");
-          const qualitiesPattern = Object.keys(CHORD_FORMULAS).filter((q) => q).map((q) => q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length).join("|");
-          return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?$`, "i");
-        }
-        const VALID_DURATION_CODES = [
-          "w",
-          "1",
-          "h",
-          "2",
-          "dh",
-          "d2",
-          "q",
-          "4",
-          "dq",
-          "d4",
-          "e",
-          "8",
-          "de",
-          "d8",
-          "s",
-          "16"
-        ];
-        function validateChordProgression(progression) {
-          const normalizedProgression = progression.replace(/\|/g, " ").replace(/->/g, " ").replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
-          if (!normalizedProgression) {
-            return "";
-          }
-          const chordEntries = normalizedProgression.split(/\s+/);
-          const validChordSymbolPattern = generateValidChordPattern();
-          const validatedEntries = [];
-          for (const entry of chordEntries) {
-            if (!entry) continue;
-            const parts = entry.split(":");
-            const chordSymbol = parts[0];
-            const durationStr = parts.length > 1 ? parts[1] : void 0;
-            if (!validChordSymbolPattern.test(chordSymbol)) {
-              throw new Error(`Invalid chord symbol: "${chordSymbol}" in entry "${entry}". Use formats like C, Cm, G7.`);
-            }
-            if (durationStr !== void 0) {
-              const numericDuration = parseFloat(durationStr);
-              const isValidNumeric = !isNaN(numericDuration) && numericDuration > 0;
-              const isKnownCode = VALID_DURATION_CODES.includes(durationStr.toLowerCase());
-              const isTCode = /^t\d+$/i.test(durationStr);
-              if (!isValidNumeric && !isKnownCode && !isTCode) {
-                throw new Error(`Invalid duration: "${durationStr}" for chord "${chordSymbol}". Use beats (e.g., 0.5, 1), codes (e.g., q, 8, d4), or T-codes (e.g., T128).`);
-              }
-              validatedEntries.push(`${chordSymbol}:${durationStr}`);
-            } else {
-              validatedEntries.push(chordSymbol);
-            }
-          }
-          return validatedEntries.join(" ");
-        }
-        const handleGeneration = (isDownloadOnly) => {
-          const actionText = isDownloadOnly ? "Generating MIDI file" : "Generating preview and MIDI";
-          statusDiv.textContent = `${actionText}...`;
-          statusDiv.classList.remove("text-danger", "text-success");
-          statusDiv.classList.add("text-muted");
-          try {
-            const formData = new FormData(form);
-            const rawProgression = formData.get("progression");
-            const validatedProgression = validateChordProgression(rawProgression);
-            const options = {
-              progressionString: validatedProgression,
-              outputFileName: formData.get("outputFileName") || void 0,
-              // Let generator handle default
-              outputType: formData.get("outputType"),
-              inversionType: formData.get("inversionType"),
-              baseOctave: parseInt(formData.get("baseOctave"), 10),
-              chordDurationStr: formData.get("chordDuration"),
-              tempo: parseInt(formData.get("tempo"), 10),
-              velocity: parseInt(formData.get("velocity"), 10)
-            };
-            const generationResult = midiGenerator.generate(options);
-            lastGeneratedResult = generationResult;
-            lastGeneratedNotes = generationResult.notesForPianoRoll;
-            const chordDetails = generationResult.chordDetails;
-            console.log("Chord Details:", chordDetails);
-            lastGeneratedMidiBlob = generationResult.midiBlob;
-            const progressionChordSymbols = validatedProgression.split(" ").map((entry) => entry.split(":")[0]);
-            pianoRollDrawer.renderChordButtons(progressionChordSymbols, chordDetails);
-            if (isDownloadOnly) {
-              triggerDownload(generationResult.midiBlob, generationResult.finalFileName);
-              statusDiv.textContent = `MIDI file "${generationResult.finalFileName}" download initiated.`;
-              statusDiv.classList.replace("text-muted", "text-success");
-            } else {
-              pianoRollDrawer.draw(generationResult.notesForPianoRoll);
-              statusDiv.textContent = `Preview generated.`;
-              statusDiv.classList.replace("text-muted", "text-success");
-            }
-          } catch (error) {
-            console.error(`Error during MIDI generation (${actionText}):`, error);
-            lastGeneratedResult = null;
-            lastGeneratedNotes = [];
-            lastGeneratedMidiBlob = null;
-            statusDiv.textContent = `Error: ${error.message || "Failed to generate MIDI."}`;
-            statusDiv.classList.replace("text-muted", "text-danger");
-            pianoRollDrawer.drawErrorMessage("Error generating preview");
-          }
-        };
-        pianoRollDrawer.renderChordButtons = (chords, chordDetails) => {
-          const buttonContainer = document.getElementById("chordButtonContainer");
-          if (!buttonContainer) {
-            console.error("Chord button container not found!");
-            return;
-          }
-          buttonContainer.innerHTML = "";
-          const activeNotesMap = /* @__PURE__ */ new Map();
-          chords.forEach((chord, index) => {
-            const button = document.createElement("button");
-            button.className = "btn btn-outline-primary m-1";
-            button.textContent = chord;
-            button.addEventListener("mousedown", () => {
-              if (chordDetails && chordDetails[index]) {
-                const midiNotes = chordDetails[index].adjustedVoicing;
-                const activeNotes = synthChordPlayer.startChord(midiNotes);
-                activeNotesMap.set(index, activeNotes);
-              } else {
-                console.warn(`No details available for chord at index ${index}`);
-              }
-            });
-            button.addEventListener("touchstart", (event) => {
-              event.preventDefault();
-              if (chordDetails && chordDetails[index]) {
-                const midiNotes = chordDetails[index].adjustedVoicing;
-                const activeNotes = synthChordPlayer.startChord(midiNotes);
-                activeNotesMap.set(index, activeNotes);
-              } else {
-                console.warn(`No details available for chord at index ${index}`);
-              }
-            });
-            button.addEventListener("mouseup", () => {
-              const activeNotes = activeNotesMap.get(index);
-              if (activeNotes) {
-                synthChordPlayer.stopNotes(activeNotes);
-                activeNotesMap.delete(index);
-              }
-            });
-            button.addEventListener("touchend", (event) => {
-              event.preventDefault();
-              const activeNotes = activeNotesMap.get(index);
-              if (activeNotes) {
-                synthChordPlayer.stopNotes(activeNotes);
-                activeNotesMap.delete(index);
-              }
-            });
-            button.addEventListener("mouseleave", () => {
-              const activeNotes = activeNotesMap.get(index);
-              if (activeNotes) {
-                synthChordPlayer.stopNotes(activeNotes);
-                activeNotesMap.delete(index);
-              }
-            });
-            button.addEventListener("touchcancel", () => {
-              const activeNotes = activeNotesMap.get(index);
-              if (activeNotes) {
-                synthChordPlayer.stopNotes(activeNotes);
-                activeNotesMap.delete(index);
-              }
-            });
-            buttonContainer.appendChild(button);
-          });
-        };
-        form.addEventListener("submit", (event) => {
-          event.preventDefault();
-          handleGeneration(false);
-        });
-        downloadMidiOnlyButton.addEventListener("click", (event) => {
-          event.preventDefault();
-          handleGeneration(true);
-        });
-        const formInputs = form.querySelectorAll("input, select, textarea");
-        formInputs.forEach((input) => {
-          input.addEventListener("change", () => {
-            handleGeneration(false);
-          });
-        });
-        let resizeTimeout;
-        window.addEventListener("resize", () => {
-          clearTimeout(resizeTimeout);
-          resizeTimeout = window.setTimeout(() => {
-            pianoRollDrawer.resize();
-          }, 100);
-        });
-        statusDiv.textContent = "Enter a progression and click generate.";
-        pianoRollDrawer.draw([]);
-        const helpButton = document.getElementById("helpButton");
-        if (helpButton) {
-          helpButton.addEventListener("click", () => {
-            ChordInfoModal.injectModalIntoDOM();
-            const modal = new window.bootstrap.Modal(document.getElementById("chordInfoModal"));
-            modal.show();
-          });
-        }
-      }
+    }
+  });
+
+  // Main.ts
+  var require_Main = __commonJS({
+    "Main.ts"() {
+      init_ChordProgressionSequencer();
       if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", setupApp);
+        document.addEventListener("DOMContentLoaded", setupChordProgressionSequencer);
       } else {
-        setupApp();
+        setupChordProgressionSequencer();
       }
     }
   });
-  require_main();
+  require_Main();
 })();
 //# sourceMappingURL=bundle.js.map
