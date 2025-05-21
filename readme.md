@@ -47,7 +47,7 @@ This application now runs entirely in your browser after a build step.
 
 **Development Workflow (Optional)**
 
-If you plan to modify the TypeScript code (`src/main.ts`), you can use the watch command:
+If you plan to modify the TypeScript code (`src/Main.ts`), you can use the watch command:
 
 ```bash
 npm run watch

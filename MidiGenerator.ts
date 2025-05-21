@@ -167,7 +167,7 @@ export const TPQN = 128; // MIDI Writer JS default ticks per quarter note
 const OCTAVE_ADJUSTMENT_THRESHOLD = 6; // Adjust if average pitch is > 6 semitones (half octave) away from target
 
 // Define the possible output types
-export type OutputType = 'chordsOnly' | 'chordsAndBass' | 'bassOnly';
+export type OutputType = 'chordsOnly' | 'chordsAndBass' | 'bassOnly' | 'notesOnly';
 export type InversionType = 'none' | 'first' | 'smooth' | 'pianist' | 'open' | 'spread' | 'cocktail';
 
 export interface MidiGenerationOptions {
@@ -179,6 +179,7 @@ export interface MidiGenerationOptions {
     chordDurationStr?: string; // Optional, provide default
     tempo: number;
     velocity: number;
+    totalSteps?: number; // <-- Add this for step sequencer
 }
 
 export interface MidiGenerationResult {
@@ -484,7 +485,8 @@ export class MidiGenerator {
             baseOctave,
             chordDurationStr,
             tempo,
-            velocity
+            velocity,
+            totalSteps // <-- Add this for step sequencer
         } = options;
 
         if (!progressionString || progressionString.trim() === '') {
@@ -497,6 +499,91 @@ export class MidiGenerator {
         } else {
             const sanitizedProgressionString = progressionString.replace(/\s+/g, '_').replace(/:/g, '-');
             finalFileName = `${sanitizedProgressionString}_${String(outputType)}_${String(inversionType)}.mid`;
+        }
+
+        // --- Special handling for notesOnly mode ---
+        if (outputType === 'notesOnly') {
+            // Each entry: note:P#:L#:V# (e.g. C4:P1:L1:V100)
+            const noteEntries = progressionString.trim().split(/\s+/);
+            interface NoteEvent { midiNote: number; startStep: number; length: number; velocity: number; }
+            const events: NoteEvent[] = [];
+            let maxStep = 0;
+            for (const entry of noteEntries) {
+                // Format: NOTE:P#:L#:V#
+                const parts = entry.split(':');
+                let note = 'C4';
+                let pos = 0;
+                let len = 1;
+                let vel = velocity;
+                for (const part of parts) {
+                    if (/^[A-G][#b]?\d+$|^\d+$/.test(part)) note = part;
+                    else if (/^P(\d+)$/i.test(part)) pos = parseInt(part.slice(1), 10) - 1;
+                    else if (/^L(\d+)$/i.test(part)) len = parseInt(part.slice(1), 10);
+                    else if (/^V(\d+)$/i.test(part)) vel = parseInt(part.slice(1), 10);
+                }
+                const noteNameMatch = note.match(/^([A-G][#b]?)(\d+)$/i);
+                if (!noteNameMatch) continue;
+                const noteName = noteNameMatch[1];
+                const octave = parseInt(noteNameMatch[2], 10);
+                const midiNote = this.getMidiNote(noteName, octave);
+                events.push({ midiNote, startStep: pos, length: len, velocity: vel });
+                if (pos + len > maxStep) maxStep = pos + len;
+            }
+            // --- Use totalSteps if provided, else fallback to maxStep or 16 ---
+            if (options.totalSteps && options.totalSteps > maxStep) {
+                maxStep = options.totalSteps;
+            } else if (maxStep < 16) {
+                maxStep = 16;
+            }
+            // Group events by step for simultaneity
+            const stepMap: Record<number, NoteEvent[]> = {};
+            for (const ev of events) {
+                for (let i = 0; i < ev.length; ++i) {
+                    const step = ev.startStep + i;
+                    if (!stepMap[step]) stepMap[step] = [];
+                    stepMap[step].push({ ...ev, startStep: step, length: 1 });
+                }
+            }
+            // Build MIDI
+            const TPQN = 128;
+            const stepTicks = TPQN / 4; // 16 steps = 4 bars, 4 steps per bar, 1 step = 1/4 note
+            const track = new midiWriterJs.Track();
+            track.setTempo(tempo);
+            track.setTimeSignature(4, 4, 24, 8);
+            const notesForPianoRoll: NoteData[] = [];
+            let waitSteps = 0;
+            for (let step = 0; step < maxStep; ++step) {
+                const eventsAtStep = stepMap[step] || [];
+                if (eventsAtStep.length > 0) {
+                    const pitches = eventsAtStep.map(ev => ev.midiNote);
+                    const velocities = eventsAtStep.map(ev => ev.velocity);
+                    const velocity = velocities.length > 0 ? Math.max(...velocities) : 100;
+                    const noteEventOptions: any = {
+                        pitch: pitches,
+                        duration: 'T' + stepTicks,
+                        velocity: velocity
+                    };
+                    if (waitSteps > 0) {
+                        noteEventOptions.wait = 'T' + (waitSteps * stepTicks);
+                        waitSteps = 0;
+                    }
+                    track.addEvent(new midiWriterJs.NoteEvent(noteEventOptions));
+                    eventsAtStep.forEach(ev => {
+                        notesForPianoRoll.push({
+                            midiNote: ev.midiNote,
+                            startTimeTicks: step * stepTicks,
+                            durationTicks: stepTicks,
+                            velocity: ev.velocity
+                        });
+                    });
+                } else {
+                    waitSteps++;
+                }
+            }
+            const writer = new midiWriterJs.Writer([track]);
+            const midiDataBytes = writer.buildFile();
+            const midiBlob = new Blob([midiDataBytes], { type: 'audio/midi' });
+            return { notesForPianoRoll, midiBlob, finalFileName, chordDetails: [] };
         }
 
         // const chordDurationTicks = this.getDurationTicks(chordDurationStr); // OLD
