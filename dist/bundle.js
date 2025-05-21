@@ -2626,7 +2626,7 @@
     let maxStep = 0;
     function parseNoteSequenceInput() {
       sequencer = new StepSequencer(Number(stepsInput.value) || 16);
-      const lines = noteSequenceInput.value.split(/\n|\r/).map((l) => l.trim()).filter(Boolean);
+      const lines = noteSequenceInput.value.split(/\s+/).map((l) => l.trim()).filter(Boolean);
       events = [];
       maxStep = 0;
       for (const line of lines) {

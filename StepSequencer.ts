@@ -84,7 +84,8 @@ export function setupStepSequencerUI() {
 
     function parseNoteSequenceInput(): void {
         sequencer = new StepSequencer(Number(stepsInput!.value) || 16);
-        const lines = noteSequenceInput!.value.split(/\n|\r/).map(l => l.trim()).filter(Boolean);
+        // Accept both single-line (space-separated) and multi-line (newline-separated) input
+        const lines = noteSequenceInput!.value.split(/\s+/).map(l => l.trim()).filter(Boolean);
         events = [];
         maxStep = 0;
         for (const line of lines) {
