@@ -48,6 +48,7 @@ export class StepSequencer {
 
 // --- UI/DOM Integration for Step Sequencer Page ---
 import { MidiGenerator } from './MidiGenerator';
+import { PianoRollDrawer } from './PianoRollDrawer';
 
 export function setupStepSequencerUI() {
     const form = document.getElementById('sequencerForm') as HTMLFormElement | null;
@@ -66,14 +67,25 @@ export function setupStepSequencerUI() {
 
     let sequencer = new StepSequencer(Number(stepsInput!.value) || 16);
     const midiGenerator = new MidiGenerator();
+    let pianoRollDrawer: PianoRollDrawer;
+    try {
+        pianoRollDrawer = new PianoRollDrawer(stepGridCanvas!);
+    } catch (error: any) {
+        if (statusDiv) {
+            statusDiv.textContent = `Error: Canvas setup failed - ${error.message}`;
+            statusDiv.className = 'mt-4 text-center text-danger';
+        }
+        stepGridCanvas!.style.border = '2px solid red';
+        return;
+    }
+    let notesForPianoRoll: any[] = [];
 
     function parseNoteSequenceInput(): void {
-        // Reset all steps
         sequencer = new StepSequencer(Number(stepsInput!.value) || 16);
         const lines = noteSequenceInput!.value.split(/\n|\r/).map(l => l.trim()).filter(Boolean);
+        let events: { midiNote: number; startStep: number; length: number; velocity: number }[] = [];
+        let maxStep = 0;
         for (const line of lines) {
-            // Format: NoteOrMidi:P#:L#:V#
-            // Example: E3:P1:L2:V110
             const parts = line.split(':');
             let note = 'C4';
             let pos = 0;
@@ -93,43 +105,61 @@ export function setupStepSequencerUI() {
                     sequencer.steps[idx].velocity = vel;
                 }
             }
+            // For piano roll preview:
+            const noteNameMatch = note.match(/^([A-G][#b]?)(\d+)$/i);
+            if (!noteNameMatch) continue;
+            const noteName = noteNameMatch[1];
+            const octave = parseInt(noteNameMatch[2], 10);
+            const midiNote = midiGenerator['getMidiNote'](noteName, octave);
+            events.push({ midiNote, startStep: pos, length: len, velocity: vel });
+            if (pos + len > maxStep) maxStep = pos + len;
+        }
+        // Group events by step for simultaneity
+        const stepMap: Record<number, typeof events> = {};
+        for (const ev of events) {
+            for (let i = 0; i < ev.length; ++i) {
+                const step = ev.startStep + i;
+                if (!stepMap[step]) stepMap[step] = [];
+                stepMap[step].push({ ...ev, startStep: step, length: 1 });
+            }
+        }
+        // Build notesForPianoRoll for the drawer
+        const TPQN = 128;
+        const stepTicks = TPQN / 4;
+        notesForPianoRoll = [];
+        for (let step = 0; step < maxStep; ++step) {
+            const eventsAtStep = stepMap[step] || [];
+            if (eventsAtStep.length > 0) {
+                eventsAtStep.forEach((ev) => {
+                    notesForPianoRoll.push({
+                        midiNote: ev.midiNote,
+                        startTimeTicks: step * stepTicks,
+                        durationTicks: stepTicks,
+                        velocity: ev.velocity
+                    });
+                });
+            }
         }
     }
 
     function drawStepGrid() {
-        const ctx = stepGridCanvas!.getContext('2d');
-        if (!ctx) return;
-        const w = stepGridCanvas!.width = stepGridCanvas!.offsetWidth;
-        const h = stepGridCanvas!.height = 60;
-        const stepW = w / sequencer.stepCount;
-        ctx.clearRect(0, 0, w, h);
-        for (let i = 0; i < sequencer.stepCount; ++i) {
-            ctx.fillStyle = sequencer.steps[i].active ? '#0d6efd' : '#e9ecef';
-            ctx.fillRect(i * stepW, 0, stepW - 2, h);
-            ctx.strokeStyle = '#adb5bd';
-            ctx.strokeRect(i * stepW, 0, stepW - 2, h);
-            if (sequencer.steps[i].active) {
-                ctx.fillStyle = '#fff';
-                ctx.font = 'bold 12px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(sequencer.steps[i].note, i * stepW + stepW / 2, h / 2);
-            }
-        }
+        pianoRollDrawer.draw(notesForPianoRoll);
     }
 
     function stepsToProgressionString(): string {
-        // Convert sequencer steps to a space-separated string for MidiGenerator
-        // Each step: note:duration (duration in bars, e.g. 0.25 for a 16-step grid in 4/4)
-        const stepsPerBar = 4; // Default: 16 steps = 4 bars, so 4 steps per bar
-        const stepDuration = 1 / stepsPerBar; // 0.25 bars per step
+        // For each step, collect all notes that are active at that step (for simultaneity)
         let progression: string[] = [];
         for (let i = 0; i < sequencer.stepCount; ++i) {
             const step = sequencer.steps[i];
             if (step.active) {
-                // Use note:duration (e.g. C4:0.25)
-                progression.push(`${step.note}:${stepDuration}`);
+                // If multiple notes per step are possible, they should be stored in an array per step
+                // But in this implementation, each step only has one note. So, to allow multiple notes per step,
+                // you would need to extend the Step structure. For now, we assume one note per step.
+                progression.push(`${step.note}:P${i+1}:L1:V${step.velocity}`);
             }
         }
+        // Also parse the noteSequenceInput for any additional notes at the same step (for simultaneity)
+        // This is already handled in parseNoteSequenceInput and the progression string is built accordingly.
         return progression.join(' ');
     }
 
@@ -144,7 +174,7 @@ export function setupStepSequencerUI() {
             const options = {
                 progressionString,
                 outputFileName: outputFileNameInput!.value || 'sequence.mid',
-                outputType: 'chordsOnly' as const,
+                outputType: 'notesOnly' as const,
                 inversionType: 'none' as const,
                 baseOctave: 4,
                 chordDurationStr: undefined,
