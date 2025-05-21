@@ -2,6 +2,8 @@ import { MidiGenerator, MidiGenerationOptions, MidiGenerationResult, CHORD_FORMU
 import { PianoRollDrawer } from './PianoRollDrawer';
 import { SynthChordPlayer, ActiveNote } from './SynthChordPlayer';
 import { ChordInfoModal } from './ChordInfoModal';
+import { normalizeNoteName, getMidiNote, getNoteNameFromMidi } from './Utils';
+import { ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION, VALID_DURATION_CODES, generateValidChordPattern } from './ValidationUtils';
 
 // Keep NoteData interface accessible if needed by Main.ts directly
 interface NoteData {
@@ -81,46 +83,6 @@ export function setupChordProgressionSequencer() {
             }, 2000); // Reset after 2 seconds
         }
     };
-
-    // Define a more inclusive list of possible note names for validation ONLY
-    // This allows users to input flats, while MidiGenerator handles internal normalization.
-    const ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION = [
-        'C', 'C#', 'Db',
-        'D', 'D#', 'Eb',
-        'E', 'Fb', // E flat is Eb, F flat is E
-        'F', 'F#', 'Gb',
-        'G', 'G#', 'Ab',
-        'A', 'A#', 'Bb',
-        'B', 'Cb'  // C flat is B
-        // We don't strictly need E# or B# here as users rarely input them,
-        // and MidiGenerator normalizes them anyway if they somehow get through.
-    ];
-
-    function generateValidChordPattern(): RegExp {
-        // Use the inclusive list for the root note pattern
-        const notePattern = ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION
-            .join('|');
-
-        // Get qualities, escape special regex chars, sort by length descending
-        const qualitiesPattern = Object.keys(CHORD_FORMULAS)
-            .filter(q => q) // Exclude the empty string quality ('') used for plain major
-            .map(q => q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) // Escape special chars like +, (, )
-            .sort((a, b) => b.length - a.length) // IMPORTANT: Match longer qualities first (e.g., maj7 before maj)
-            .join('|');
-
-        // Final Regex: Root note followed by an optional known quality string.
-        // Allows "C", "Cm", "G7", "Bbmaj7", "Dbdim", etc.
-        // It relies on the chord parser in MidiGenerator to handle the actual interpretation.
-        // Added 'i' flag for case-insensitive matching (e.g., bbmaj7 works)
-        return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?$`, 'i');
-    }
-
-    const VALID_DURATION_CODES = [
-        'w', '1', 'h', '2', 'dh', 'd2',
-        'q', '4', 'dq', 'd4', 'e', '8',
-        'de', 'd8', 's', '16'
-    ];
-
 
     function validateChordProgression(progression: string): string {
         const normalizedProgression = progression

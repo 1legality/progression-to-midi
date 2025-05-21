@@ -49,6 +49,7 @@ export class StepSequencer {
 // --- UI/DOM Integration for Step Sequencer Page ---
 import { MidiGenerator } from './MidiGenerator';
 import { PianoRollDrawer } from './PianoRollDrawer';
+import { getNoteNameFromMidi } from './Utils';
 
 export function setupStepSequencerUI() {
     const form = document.getElementById('sequencerForm') as HTMLFormElement | null;
@@ -170,14 +171,6 @@ export function setupStepSequencerUI() {
             // No dummy note for empty steps!
         }
         return progression.join(' ');
-    }
-
-    function getNoteNameFromMidi(midiNote: number): string {
-        // Convert MIDI note number back to note name and octave (e.g., 36 -> C2)
-        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-        const note = noteNames[midiNote % 12];
-        const octave = Math.floor(midiNote / 12) - 1;
-        return `${note}${octave}`;
     }
 
     function handleDownload() {

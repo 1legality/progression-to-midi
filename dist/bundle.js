@@ -2307,6 +2307,59 @@
     }
   });
 
+  // ValidationUtils.ts
+  function generateValidChordPattern() {
+    const notePattern = ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION.join("|");
+    const qualitiesPattern = Object.keys(CHORD_FORMULAS).filter((q) => q).map((q) => q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length).join("|");
+    return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?$`, "i");
+  }
+  var ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION, VALID_DURATION_CODES;
+  var init_ValidationUtils = __esm({
+    "ValidationUtils.ts"() {
+      "use strict";
+      init_MidiGenerator();
+      ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION = [
+        "C",
+        "C#",
+        "Db",
+        "D",
+        "D#",
+        "Eb",
+        "E",
+        "Fb",
+        "F",
+        "F#",
+        "Gb",
+        "G",
+        "G#",
+        "Ab",
+        "A",
+        "A#",
+        "Bb",
+        "B",
+        "Cb"
+      ];
+      VALID_DURATION_CODES = [
+        "w",
+        "1",
+        "h",
+        "2",
+        "dh",
+        "d2",
+        "q",
+        "4",
+        "dq",
+        "d4",
+        "e",
+        "8",
+        "de",
+        "d8",
+        "s",
+        "16"
+      ];
+    }
+  });
+
   // ChordProgressionSequencer.ts
   function triggerDownload(blob, filename) {
     const url = URL.createObjectURL(blob);
@@ -2363,54 +2416,6 @@
         }, 2e3);
       }
     };
-    const ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION = [
-      "C",
-      "C#",
-      "Db",
-      "D",
-      "D#",
-      "Eb",
-      "E",
-      "Fb",
-      // E flat is Eb, F flat is E
-      "F",
-      "F#",
-      "Gb",
-      "G",
-      "G#",
-      "Ab",
-      "A",
-      "A#",
-      "Bb",
-      "B",
-      "Cb"
-      // C flat is B
-      // We don't strictly need E# or B# here as users rarely input them,
-      // and MidiGenerator normalizes them anyway if they somehow get through.
-    ];
-    function generateValidChordPattern() {
-      const notePattern = ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION.join("|");
-      const qualitiesPattern = Object.keys(CHORD_FORMULAS).filter((q) => q).map((q) => q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length).join("|");
-      return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?$`, "i");
-    }
-    const VALID_DURATION_CODES = [
-      "w",
-      "1",
-      "h",
-      "2",
-      "dh",
-      "d2",
-      "q",
-      "4",
-      "dq",
-      "d4",
-      "e",
-      "8",
-      "de",
-      "d8",
-      "s",
-      "16"
-    ];
     function validateChordProgression(progression) {
       const normalizedProgression = progression.replace(/\|/g, " ").replace(/->/g, " ").replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
       if (!normalizedProgression) {
@@ -2591,6 +2596,21 @@
       init_PianoRollDrawer();
       init_SynthChordPlayer();
       init_ChordInfoModal();
+      init_ValidationUtils();
+    }
+  });
+
+  // Utils.ts
+  function getNoteNameFromMidi(midiNote) {
+    const note = NOTES3[midiNote % 12];
+    const octave = Math.floor(midiNote / 12) - 1;
+    return `${note}${octave}`;
+  }
+  var NOTES3;
+  var init_Utils = __esm({
+    "Utils.ts"() {
+      "use strict";
+      NOTES3 = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
     }
   });
 
@@ -2703,12 +2723,6 @@
       }
       return progression.join(" ");
     }
-    function getNoteNameFromMidi(midiNote) {
-      const noteNames = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-      const note = noteNames[midiNote % 12];
-      const octave = Math.floor(midiNote / 12) - 1;
-      return `${note}${octave}`;
-    }
     function handleDownload() {
       try {
         const progressionString = stepsToProgressionString();
@@ -2771,6 +2785,7 @@
       "use strict";
       init_MidiGenerator();
       init_PianoRollDrawer();
+      init_Utils();
       StepSequencer = class {
         constructor(stepCount = 16) {
           this.stepCount = stepCount;
