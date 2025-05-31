@@ -45,6 +45,40 @@ This application now runs entirely in your browser after a build step.
 - Example: `C:1 G:0.5 Am F` means C for 1 bar, G for half a bar, Am and F will use the default duration selected in the Chord Duration dropdown.
 - If no duration is provided for a chord, the default is the value selected in the Chord Duration dropdown on the web interface.
 
+## Instructions: Creating Chord Progressions and Step Sequences
+
+### Chord Progression Mode
+
+- **Format:** Enter chords separated by spaces. Each chord can optionally have a duration specified after a colon.
+- **Example:**
+  - `C G Am F` (all chords use the default duration)
+  - `C:1 G:0.5 Am:2 F` (C for 1 bar, G for half a bar, Am for 2 bars, F uses the default duration)
+- **Durations:**
+  - Durations are in **bars** (e.g., `1` = 1 bar, `0.5` = half a bar).
+  - If no duration is provided, the default is the value selected in the Chord Duration dropdown.
+  - Advanced: You can use absolute ticks by prefixing with `T` (e.g., `T128` for a quarter note).
+- **Chord Qualities:**
+  - Use standard chord symbols (e.g., `C`, `Cm`, `G7`, `F#dim7`).
+  - Root notes: A-G, optionally followed by # (sharp) or b (flat).
+  - See the in-app help for a full list of supported chord qualities.
+
+### Step Sequencer Mode
+
+- **Format:** Each note is specified as `NoteOrMidi:P#:L#:V#`.
+  - `NoteOrMidi`: Note name (e.g., `E3`, `G#4`) or MIDI number (e.g., `60`)
+  - `P#`: Position (step number, starting at 1)
+  - `L#`: Length (number of steps)
+  - `V#`: Velocity (1-127)
+- **Example:**
+  - `E3:P1:L2:V110 G3:P3:L1:V90`
+  - This means E3 starts at step 1 for 2 steps at velocity 110, G3 starts at step 3 for 1 step at velocity 90.
+- **Input:**
+  - You can enter notes separated by spaces or newlines.
+  - The total number of steps is set in the "Total Steps" field.
+
+**Tip:**
+- For both modes, you can copy and paste progressions or sequences from your favorite AI or DAW, then adjust as needed.
+
 **Development Workflow (Optional)**
 
 If you plan to modify the TypeScript code (`src/Main.ts`), you can use the watch command:

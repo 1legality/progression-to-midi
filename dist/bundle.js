@@ -2669,11 +2669,16 @@
             sequencer.steps[idx].velocity = vel;
           }
         }
+        let midiNote = null;
         const noteNameMatch = note.match(/^([A-G][#b]?)(\d+)$/i);
-        if (!noteNameMatch) continue;
-        const noteName = noteNameMatch[1];
-        const octave = parseInt(noteNameMatch[2], 10);
-        const midiNote = midiGenerator["getMidiNote"](noteName, octave);
+        if (noteNameMatch) {
+          const noteName = noteNameMatch[1];
+          const octave = parseInt(noteNameMatch[2], 10);
+          midiNote = midiGenerator["getMidiNote"](noteName, octave);
+        } else if (/^\d+$/.test(note)) {
+          midiNote = parseInt(note, 10);
+        }
+        if (midiNote === null) continue;
         events.push({ midiNote, startStep: pos, length: len, velocity: vel });
         if (pos + len > maxStep) maxStep = pos + len;
       }
