@@ -522,63 +522,86 @@ export class MidiGenerator {
                     else if (/^V(\d+)$/i.test(part)) vel = parseInt(part.slice(1), 10);
                 }
                 const noteNameMatch = note.match(/^([A-G][#b]?)(\d+)$/i);
-                if (!noteNameMatch) continue;
-                const noteName = noteNameMatch[1];
-                const octave = parseInt(noteNameMatch[2], 10);
-                const midiNote = this.getMidiNote(noteName, octave);
+                let midiNote: number | null = null;
+                if (noteNameMatch) {
+                    const noteName = noteNameMatch[1];
+                    const octave = parseInt(noteNameMatch[2], 10);
+                    midiNote = this.getMidiNote(noteName, octave);
+                } else if (/^\d+$/.test(note)) {
+                    midiNote = parseInt(note, 10);
+                }
+                if (midiNote === null) continue;
+                // Only add one event per note (at its start position, with its full length)
                 events.push({ midiNote, startStep: pos, length: len, velocity: vel });
+            console.log(`MidiGenerator: Parsed note: ${note}, midiNote: ${midiNote}, startStep: ${pos}, length: ${len}, velocity: ${vel}`);
                 if (pos + len > maxStep) maxStep = pos + len;
             }
             // --- Use totalSteps if provided, else fallback to maxStep or 16 ---
-            if (options.totalSteps && options.totalSteps > maxStep) {
-                maxStep = options.totalSteps;
-            } else if (maxStep < 16) {
-                maxStep = 16;
-            }
-            // Group events by step for simultaneity
-            const stepMap: Record<number, NoteEvent[]> = {};
-            for (const ev of events) {
-                for (let i = 0; i < ev.length; ++i) {
-                    const step = ev.startStep + i;
-                    if (!stepMap[step]) stepMap[step] = [];
-                    stepMap[step].push({ ...ev, startStep: step, length: 1 });
-                }
+            let gridSteps = maxStep;
+            if (options.totalSteps && options.totalSteps > 0) {
+                gridSteps = options.totalSteps;
+            } else if (gridSteps < 16) {
+                gridSteps = 16;
             }
             // Build MIDI
             const TPQN = 128;
-            const stepTicks = TPQN / 4; // 16 steps = 4 bars, 4 steps per bar, 1 step = 1/4 note
+            // Calculate stepTicks so that the total number of steps fits into one 4/4 bar.
+            const stepTicks = (TPQN * 4) / gridSteps; // e.g., for 16 steps, each step is a 16th note.
             const track = new midiWriterJs.Track();
             track.setTempo(tempo);
             track.setTimeSignature(4, 4, 24, 8);
             const notesForPianoRoll: NoteData[] = [];
-            let waitSteps = 0;
-            for (let step = 0; step < maxStep; ++step) {
-                const eventsAtStep = stepMap[step] || [];
-                if (eventsAtStep.length > 0) {
-                    const pitches = eventsAtStep.map(ev => ev.midiNote);
-                    const velocities = eventsAtStep.map(ev => ev.velocity);
-                    const velocity = velocities.length > 0 ? Math.max(...velocities) : 100;
-                    const noteEventOptions: any = {
-                        pitch: pitches,
-                        duration: 'T' + stepTicks,
-                        velocity: velocity
-                    };
-                    if (waitSteps > 0) {
-                        noteEventOptions.wait = 'T' + (waitSteps * stepTicks);
-                        waitSteps = 0;
-                    }
-                    track.addEvent(new midiWriterJs.NoteEvent(noteEventOptions));
-                    eventsAtStep.forEach(ev => {
-                        notesForPianoRoll.push({
-                            midiNote: ev.midiNote,
-                            startTimeTicks: step * stepTicks,
-                            durationTicks: stepTicks,
-                            velocity: ev.velocity
-                        });
-                    });
-                } else {
-                    waitSteps++;
+            // Add each event as a single note with its full length
+            // Sort events by startStep to ensure correct timing
+            events.sort((a, b) => a.startStep - b.startStep);
+
+            let currentTrackTick = 0; // Explicitly manage the track's current time position
+
+            for (const ev of events) {
+                const startTick = ev.startStep * stepTicks;
+                const durationTick = ev.length * stepTicks;
+
+                // Calculate the wait time needed to reach the note's desired absolute start position.
+                // This is the difference between the desired start time and the current track time.
+                const waitTime = startTick - currentTrackTick;
+
+                // If waitTime is positive, it means there's a gap before this note. Add a rest.
+                if (waitTime > 0) {
+                    track.addEvent(new midiWriterJs.NoteEvent({
+                        pitch: [], // No pitch for a rest
+                        duration: 'T' + waitTime,
+                        velocity: 0 // No velocity for a rest
+                    }));
+                    currentTrackTick += waitTime; // Advance track position by the rest
                 }
+                // If waitTime is 0 or negative, the note starts at or before currentTrackTick.
+                // For a single-track step sequencer, negative waitTime implies an overlap
+                // or that the previous note extended past this note's start.
+                // midi-writer-js will place the note at the current track position if wait is 0 or undefined.
+                // We proceed to add the note directly without a 'wait' parameter in this case.
+
+                track.addEvent(new midiWriterJs.NoteEvent({
+                    pitch: [ev.midiNote],
+                    duration: 'T' + durationTick,
+                    velocity: ev.velocity
+                }));
+                notesForPianoRoll.push({
+                    midiNote: ev.midiNote,
+                    startTimeTicks: startTick,
+                    durationTicks: durationTick,
+                    velocity: ev.velocity
+                });
+                currentTrackTick += durationTick; // Advance track position by the note's duration
+            }
+            // Add a final rest/wait event to fill the grid to totalSteps (not maxStep)
+            const totalTicks = gridSteps * stepTicks;
+            if (currentTrackTick < totalTicks) {
+                track.addEvent(new midiWriterJs.NoteEvent({
+                    pitch: [],
+                    wait: 'T' + (totalTicks - currentTrackTick),
+                    duration: 'T0',
+                    velocity: 0
+                }));
             }
             const writer = new midiWriterJs.Writer([track]);
             const midiDataBytes = writer.buildFile();

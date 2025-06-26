@@ -1573,60 +1573,68 @@
                 else if (/^V(\d+)$/i.test(part)) vel = parseInt(part.slice(1), 10);
               }
               const noteNameMatch = note.match(/^([A-G][#b]?)(\d+)$/i);
-              if (!noteNameMatch) continue;
-              const noteName = noteNameMatch[1];
-              const octave = parseInt(noteNameMatch[2], 10);
-              const midiNote = this.getMidiNote(noteName, octave);
+              let midiNote = null;
+              if (noteNameMatch) {
+                const noteName = noteNameMatch[1];
+                const octave = parseInt(noteNameMatch[2], 10);
+                midiNote = this.getMidiNote(noteName, octave);
+              } else if (/^\d+$/.test(note)) {
+                midiNote = parseInt(note, 10);
+              }
+              if (midiNote === null) continue;
               events.push({ midiNote, startStep: pos, length: len, velocity: vel });
+              console.log(`MidiGenerator: Parsed note: ${note}, midiNote: ${midiNote}, startStep: ${pos}, length: ${len}, velocity: ${vel}`);
               if (pos + len > maxStep) maxStep = pos + len;
             }
-            if (options.totalSteps && options.totalSteps > maxStep) {
-              maxStep = options.totalSteps;
-            } else if (maxStep < 16) {
-              maxStep = 16;
-            }
-            const stepMap = {};
-            for (const ev of events) {
-              for (let i = 0; i < ev.length; ++i) {
-                const step = ev.startStep + i;
-                if (!stepMap[step]) stepMap[step] = [];
-                stepMap[step].push({ ...ev, startStep: step, length: 1 });
-              }
+            let gridSteps = maxStep;
+            if (options.totalSteps && options.totalSteps > 0) {
+              gridSteps = options.totalSteps;
+            } else if (gridSteps < 16) {
+              gridSteps = 16;
             }
             const TPQN2 = 128;
-            const stepTicks = TPQN2 / 4;
+            const stepTicks = TPQN2 * 4 / gridSteps;
             const track2 = new import_midi_writer_js.default.Track();
             track2.setTempo(tempo);
             track2.setTimeSignature(4, 4, 24, 8);
             const notesForPianoRoll2 = [];
-            let waitSteps = 0;
-            for (let step = 0; step < maxStep; ++step) {
-              const eventsAtStep = stepMap[step] || [];
-              if (eventsAtStep.length > 0) {
-                const pitches = eventsAtStep.map((ev) => ev.midiNote);
-                const velocities = eventsAtStep.map((ev) => ev.velocity);
-                const velocity2 = velocities.length > 0 ? Math.max(...velocities) : 100;
-                const noteEventOptions = {
-                  pitch: pitches,
-                  duration: "T" + stepTicks,
-                  velocity: velocity2
-                };
-                if (waitSteps > 0) {
-                  noteEventOptions.wait = "T" + waitSteps * stepTicks;
-                  waitSteps = 0;
-                }
-                track2.addEvent(new import_midi_writer_js.default.NoteEvent(noteEventOptions));
-                eventsAtStep.forEach((ev) => {
-                  notesForPianoRoll2.push({
-                    midiNote: ev.midiNote,
-                    startTimeTicks: step * stepTicks,
-                    durationTicks: stepTicks,
-                    velocity: ev.velocity
-                  });
-                });
-              } else {
-                waitSteps++;
+            events.sort((a, b) => a.startStep - b.startStep);
+            let currentTrackTick = 0;
+            for (const ev of events) {
+              const startTick = ev.startStep * stepTicks;
+              const durationTick = ev.length * stepTicks;
+              const waitTime = startTick - currentTrackTick;
+              if (waitTime > 0) {
+                track2.addEvent(new import_midi_writer_js.default.NoteEvent({
+                  pitch: [],
+                  // No pitch for a rest
+                  duration: "T" + waitTime,
+                  velocity: 0
+                  // No velocity for a rest
+                }));
+                currentTrackTick += waitTime;
               }
+              track2.addEvent(new import_midi_writer_js.default.NoteEvent({
+                pitch: [ev.midiNote],
+                duration: "T" + durationTick,
+                velocity: ev.velocity
+              }));
+              notesForPianoRoll2.push({
+                midiNote: ev.midiNote,
+                startTimeTicks: startTick,
+                durationTicks: durationTick,
+                velocity: ev.velocity
+              });
+              currentTrackTick += durationTick;
+            }
+            const totalTicks = gridSteps * stepTicks;
+            if (currentTrackTick < totalTicks) {
+              track2.addEvent(new import_midi_writer_js.default.NoteEvent({
+                pitch: [],
+                wait: "T" + (totalTicks - currentTrackTick),
+                duration: "T0",
+                velocity: 0
+              }));
             }
             const writer2 = new import_midi_writer_js.default.Writer([track2]);
             const midiDataBytes2 = writer2.buildFile();
@@ -2618,17 +2626,15 @@
   function setupStepSequencerUI() {
     const form = document.getElementById("sequencerForm");
     const statusDiv = document.getElementById("status");
-    const stepsInput = document.getElementById("steps");
-    const tempoInput = document.getElementById("tempo");
     const noteSequenceInput = document.getElementById("noteSequence");
     const outputFileNameInput = document.getElementById("outputFileName");
     const downloadMidiButton = document.getElementById("downloadMidiButton");
     const stepGridCanvas = document.getElementById("stepGridCanvas");
-    if (!form || !statusDiv || !stepsInput || !tempoInput || !noteSequenceInput || !outputFileNameInput || !downloadMidiButton || !stepGridCanvas) {
+    if (!form || !statusDiv || !noteSequenceInput || !outputFileNameInput || !downloadMidiButton || !stepGridCanvas) {
       if (statusDiv) statusDiv.textContent = "Error: Could not initialize the step sequencer (missing elements).";
       return;
     }
-    let sequencer = new StepSequencer(Number(stepsInput.value) || 16);
+    let sequencer;
     const midiGenerator = new MidiGenerator();
     let pianoRollDrawer;
     try {
@@ -2644,9 +2650,21 @@
     let notesForPianoRoll = [];
     let events = [];
     let maxStep = 0;
+    let totalSteps = 16;
+    let tempo = 120;
     function parseNoteSequenceInput() {
-      sequencer = new StepSequencer(Number(stepsInput.value) || 16);
-      const lines = noteSequenceInput.value.split(/\s+/).map((l) => l.trim()).filter(Boolean);
+      let input = noteSequenceInput.value.trim();
+      let stepsMatch = input.match(/\|\s*S(\d+)(?::?B(\d+))?$/i);
+      if (stepsMatch) {
+        totalSteps = parseInt(stepsMatch[1], 10);
+        if (stepsMatch[2]) tempo = parseInt(stepsMatch[2], 10);
+        input = input.replace(/\|\s*S\d+(?::?B\d+)?$/i, "").trim();
+      } else {
+        totalSteps = 16;
+        tempo = 120;
+      }
+      sequencer = new StepSequencer(totalSteps);
+      const lines = input.split(/\s+/).map((l) => l.trim()).filter(Boolean);
       events = [];
       maxStep = 0;
       for (const line of lines) {
@@ -2660,14 +2678,6 @@
           else if (/^P(\d+)$/i.test(part)) pos = parseInt(part.slice(1), 10) - 1;
           else if (/^L(\d+)$/i.test(part)) len = parseInt(part.slice(1), 10);
           else if (/^V(\d+)$/i.test(part)) vel = parseInt(part.slice(1), 10);
-        }
-        for (let i = 0; i < len; ++i) {
-          const idx = pos + i;
-          if (idx >= 0 && idx < sequencer.stepCount) {
-            sequencer.steps[idx].active = true;
-            sequencer.steps[idx].note = note;
-            sequencer.steps[idx].velocity = vel;
-          }
         }
         let midiNote = null;
         const noteNameMatch = note.match(/^([A-G][#b]?)(\d+)$/i);
@@ -2683,7 +2693,7 @@
         if (pos + len > maxStep) maxStep = pos + len;
       }
       const TPQN2 = 128;
-      const stepTicks = TPQN2 / 4;
+      const stepTicks = TPQN2 * 4 / totalSteps;
       notesForPianoRoll = [];
       for (const ev of events) {
         notesForPianoRoll.push({
@@ -2719,10 +2729,10 @@
           inversionType: "none",
           baseOctave: 4,
           chordDurationStr: void 0,
-          tempo: Number(tempoInput.value) || 120,
+          tempo,
           velocity: 100,
-          totalSteps: Number(stepsInput.value) || 16
-          // Pass total steps from UI
+          totalSteps
+          // Pass total steps from parsed input
         };
         const result = midiGenerator.generate(options);
         const blob = result.midiBlob;
@@ -2741,11 +2751,6 @@
         statusDiv.className = "mt-4 text-center text-danger";
       }
     }
-    stepsInput.addEventListener("change", () => {
-      sequencer = new StepSequencer(Number(stepsInput.value) || 16);
-      parseNoteSequenceInput();
-      drawStepGrid();
-    });
     noteSequenceInput.addEventListener("input", () => {
       parseNoteSequenceInput();
       drawStepGrid();

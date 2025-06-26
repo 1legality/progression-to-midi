@@ -54,19 +54,17 @@ import { getNoteNameFromMidi } from './Utils';
 export function setupStepSequencerUI() {
     const form = document.getElementById('sequencerForm') as HTMLFormElement | null;
     const statusDiv = document.getElementById('status');
-    const stepsInput = document.getElementById('steps') as HTMLInputElement | null;
-    const tempoInput = document.getElementById('tempo') as HTMLInputElement | null;
     const noteSequenceInput = document.getElementById('noteSequence') as HTMLTextAreaElement | null;
     const outputFileNameInput = document.getElementById('outputFileName') as HTMLInputElement | null;
     const downloadMidiButton = document.getElementById('downloadMidiButton') as HTMLButtonElement | null;
     const stepGridCanvas = document.getElementById('stepGridCanvas') as HTMLCanvasElement | null;
 
-    if (!form || !statusDiv || !stepsInput || !tempoInput || !noteSequenceInput || !outputFileNameInput || !downloadMidiButton || !stepGridCanvas) {
+    if (!form || !statusDiv || !noteSequenceInput || !outputFileNameInput || !downloadMidiButton || !stepGridCanvas) {
         if (statusDiv) statusDiv.textContent = 'Error: Could not initialize the step sequencer (missing elements).';
         return;
     }
 
-    let sequencer = new StepSequencer(Number(stepsInput!.value) || 16);
+    let sequencer: StepSequencer;
     const midiGenerator = new MidiGenerator();
     let pianoRollDrawer: PianoRollDrawer;
     try {
@@ -82,11 +80,25 @@ export function setupStepSequencerUI() {
     let notesForPianoRoll: any[] = [];
     let events: { midiNote: number; startStep: number; length: number; velocity: number }[] = [];
     let maxStep = 0;
+    let totalSteps = 16;
+    let tempo = 120;
 
     function parseNoteSequenceInput(): void {
-        sequencer = new StepSequencer(Number(stepsInput!.value) || 16);
+        // Parse for | S[steps]:B[bpm] at the end
+        let input = noteSequenceInput!.value.trim();
+        let stepsMatch = input.match(/\|\s*S(\d+)(?::?B(\d+))?$/i);
+        if (stepsMatch) {
+            totalSteps = parseInt(stepsMatch[1], 10);
+            if (stepsMatch[2]) tempo = parseInt(stepsMatch[2], 10);
+            input = input.replace(/\|\s*S\d+(?::?B\d+)?$/i, '').trim();
+        } else {
+            // Default values if not provided
+            totalSteps = 16;
+            tempo = 120;
+        }
+        sequencer = new StepSequencer(totalSteps);
         // Accept both single-line (space-separated) and multi-line (newline-separated) input
-        const lines = noteSequenceInput!.value.split(/\s+/).map(l => l.trim()).filter(Boolean);
+        const lines = input.split(/\s+/).map(l => l.trim()).filter(Boolean);
         events = [];
         maxStep = 0;
         for (const line of lines) {
@@ -101,15 +113,7 @@ export function setupStepSequencerUI() {
                 else if (/^L(\d+)$/i.test(part)) len = parseInt(part.slice(1), 10);
                 else if (/^V(\d+)$/i.test(part)) vel = parseInt(part.slice(1), 10);
             }
-            for (let i = 0; i < len; ++i) {
-                const idx = pos + i;
-                if (idx >= 0 && idx < sequencer.stepCount) {
-                    sequencer.steps[idx].active = true;
-                    sequencer.steps[idx].note = note;
-                    sequencer.steps[idx].velocity = vel;
-                }
-            }
-            // For piano roll preview:
+            // Only add one event per note (at its start position, with its full length)
             let midiNote: number | null = null;
             const noteNameMatch = note.match(/^([A-G][#b]?)(\d+)$/i);
             if (noteNameMatch) {
@@ -125,7 +129,8 @@ export function setupStepSequencerUI() {
         }
         // Build notesForPianoRoll for the drawer (preserve note lengths)
         const TPQN = 128;
-        const stepTicks = TPQN / 4;
+        // Calculate stepTicks so that totalSteps always fills 4 bars
+        const stepTicks = (TPQN * 4) / totalSteps;
         notesForPianoRoll = [];
         for (const ev of events) {
             notesForPianoRoll.push({
@@ -166,9 +171,9 @@ export function setupStepSequencerUI() {
                 inversionType: 'none' as const,
                 baseOctave: 4,
                 chordDurationStr: undefined,
-                tempo: Number(tempoInput!.value) || 120,
+                tempo: tempo,
                 velocity: 100,
-                totalSteps: Number(stepsInput!.value) || 16 // Pass total steps from UI
+                totalSteps: totalSteps // Pass total steps from parsed input
             };
             const result = midiGenerator.generate(options);
             const blob = result.midiBlob;
@@ -189,11 +194,6 @@ export function setupStepSequencerUI() {
     }
 
     // --- Event Listeners ---
-    stepsInput!.addEventListener('change', () => {
-        sequencer = new StepSequencer(Number(stepsInput!.value) || 16);
-        parseNoteSequenceInput();
-        drawStepGrid();
-    });
     noteSequenceInput!.addEventListener('input', () => {
         parseNoteSequenceInput();
         drawStepGrid();

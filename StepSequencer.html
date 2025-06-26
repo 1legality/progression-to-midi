@@ -26,17 +26,11 @@
                             Enter notes in the format: <code>NoteOrMidi:P#:L#:V#</code> (e.g., <code>E3:P1:L2:V110</code> or <code>60:P1:L2:V110</code>).
                             <br>
                             <strong>P</strong>: Position (step), <strong>L</strong>: Length (steps), <strong>V</strong>: Velocity (1-127)
+                            <br>
+                            <strong>At the end, add <code>| S[steps]:B[bpm]</code> (e.g., <code>| S12:B120</code>) to set total steps and tempo.</strong>
+                            <br>
+                            <em>If not provided, defaults are <strong>16 steps</strong> and <strong>120 BPM</strong>.</em>
                         </small>
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-sm-6">
-                            <label for="steps" class="form-label">Total Steps:</label>
-                            <input type="number" id="steps" name="steps" class="form-control" value="16" min="1" max="128">
-                        </div>
-                        <div class="col-sm-6">
-                            <label for="tempo" class="form-label">Tempo (BPM):</label>
-                            <input type="number" id="tempo" name="tempo" class="form-control" value="120" min="20" max="300">
-                        </div>
                     </div>
                     <div class="my-3">
                         <label for="outputFileName" class="form-label">Output Filename (.mid):</label>
