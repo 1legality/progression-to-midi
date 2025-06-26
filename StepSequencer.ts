@@ -123,31 +123,17 @@ export function setupStepSequencerUI() {
             events.push({ midiNote, startStep: pos, length: len, velocity: vel });
             if (pos + len > maxStep) maxStep = pos + len;
         }
-        // Group events by step for simultaneity
-        const stepMap: Record<number, typeof events> = {};
-        for (const ev of events) {
-            for (let i = 0; i < ev.length; ++i) {
-                const step = ev.startStep + i;
-                if (!stepMap[step]) stepMap[step] = [];
-                stepMap[step].push({ ...ev, startStep: step, length: 1 });
-            }
-        }
-        // Build notesForPianoRoll for the drawer
+        // Build notesForPianoRoll for the drawer (preserve note lengths)
         const TPQN = 128;
         const stepTicks = TPQN / 4;
         notesForPianoRoll = [];
-        for (let step = 0; step < maxStep; ++step) {
-            const eventsAtStep = stepMap[step] || [];
-            if (eventsAtStep.length > 0) {
-                eventsAtStep.forEach((ev) => {
-                    notesForPianoRoll.push({
-                        midiNote: ev.midiNote,
-                        startTimeTicks: step * stepTicks,
-                        durationTicks: stepTicks,
-                        velocity: ev.velocity
-                    });
-                });
-            }
+        for (const ev of events) {
+            notesForPianoRoll.push({
+                midiNote: ev.midiNote,
+                startTimeTicks: ev.startStep * stepTicks,
+                durationTicks: ev.length * stepTicks,
+                velocity: ev.velocity
+            });
         }
     }
 
@@ -158,22 +144,9 @@ export function setupStepSequencerUI() {
     function stepsToProgressionString(): string {
         // Build progression string from parsed events, not from Step array
         // Only output real notes, skip dummy rest notes for empty steps
-        const stepMap: Record<number, typeof events> = {};
-        for (const ev of events) {
-            if (!stepMap[ev.startStep]) stepMap[ev.startStep] = [];
-            stepMap[ev.startStep].push(ev);
-        }
-        const totalSteps = Number(stepsInput!.value) || 16;
         let progression: string[] = [];
-        for (let i = 0; i < totalSteps; ++i) {
-            const evs = stepMap[i] || [];
-            if (evs.length > 0) {
-                // Output all notes at this step as separate entries (for simultaneity)
-                evs.forEach(ev => {
-                    progression.push(`${getNoteNameFromMidi(ev.midiNote)}:P${i+1}:L${ev.length}:V${ev.velocity}`);
-                });
-            }
-            // No dummy note for empty steps!
+        for (const ev of events) {
+            progression.push(`${getNoteNameFromMidi(ev.midiNote)}:P${ev.startStep+1}:L${ev.length}:V${ev.velocity}`);
         }
         return progression.join(' ');
     }
