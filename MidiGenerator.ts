@@ -179,8 +179,7 @@ export interface MidiGenerationOptions {
     chordDurationStr?: string; // Optional, provide default
     tempo: number;
     velocity: number;
-    totalSequenceSteps?: number; // Total steps in the entire sequence (for notesOnly)
-    stepsPerBar?: number; // How many steps constitute one bar (for notesOnly timing)
+    totalSteps?: number; // <-- Add this for step sequencer
 }
 
 export interface MidiGenerationResult {
@@ -487,8 +486,7 @@ export class MidiGenerator {
             chordDurationStr,
             tempo,
             velocity,
-            totalSequenceSteps, // Total steps in the entire sequence
-            stepsPerBar = 16 // Default to 16 steps per bar if not provided
+            totalSteps // <-- Add this for step sequencer
         } = options;
 
         if (!progressionString || progressionString.trim() === '') {
@@ -510,6 +508,7 @@ export class MidiGenerator {
             interface NoteEvent { midiNote: number; startStep: number; length: number; velocity: number; }
             const events: NoteEvent[] = [];
             let maxStep = 0;
+            for (const entry of noteEntries) {
                 // Format: NOTE:P#:L#:V#
                 const parts = entry.split(':');
                 let note = 'C4';
@@ -534,24 +533,20 @@ export class MidiGenerator {
                 if (midiNote === null) continue;
                 // Only add one event per note (at its start position, with its full length)
                 events.push({ midiNote, startStep: pos, length: len, velocity: vel });
+            console.log(`MidiGenerator: Parsed note: ${note}, midiNote: ${midiNote}, startStep: ${pos}, length: ${len}, velocity: ${vel}`);
                 if (pos + len > maxStep) maxStep = pos + len;
             }
-            // --- Determine final total sequence steps and steps per bar ---
-            let finalTotalSequenceSteps = totalSequenceSteps || maxStep; // If totalSequenceSteps not provided, use maxStep
-            // Ensure the sequence is at least as long as the last note
-            if (finalTotalSequenceSteps < maxStep) {
-                finalTotalSequenceSteps = maxStep;
+            // --- Use totalSteps if provided, else fallback to maxStep or 16 ---
+            let gridSteps = maxStep;
+            if (options.totalSteps && options.totalSteps > 0) {
+                gridSteps = options.totalSteps;
+            } else if (gridSteps < 16) {
+                gridSteps = 16;
             }
-            // Ensure finalTotalSequenceSteps is at least stepsPerBar if it's a very short sequence
-            if (finalTotalSequenceSteps < stepsPerBar) {
-                finalTotalSequenceSteps = stepsPerBar;
-            }
-
             // Build MIDI
             const TPQN = 128;
-            // Calculate stepTicks based on stepsPerBar (rhythmic resolution)
-            // This means each step is (1/stepsPerBar) of a 4/4 bar.
-            const stepTicks = (TPQN * 4) / stepsPerBar; // e.g., for 16 steps per bar, each step is a 16th note.
+            // Calculate stepTicks so that the total number of steps fits into one 4/4 bar.
+            const stepTicks = (TPQN * 4) / gridSteps; // e.g., for 16 steps, each step is a 16th note.
             const track = new midiWriterJs.Track();
             track.setTempo(tempo);
             track.setTimeSignature(4, 4, 24, 8);
@@ -599,11 +594,11 @@ export class MidiGenerator {
                 currentTrackTick += durationTick; // Advance track position by the note's duration
             }
             // Add a final rest/wait event to fill the grid to totalSteps (not maxStep)
-            const totalTicksForSequence = finalTotalSequenceSteps * stepTicks;
-            if (currentTrackTick < totalTicksForSequence) {
+            const totalTicks = gridSteps * stepTicks;
+            if (currentTrackTick < totalTicks) {
                 track.addEvent(new midiWriterJs.NoteEvent({
                     pitch: [],
-                    wait: 'T' + (totalTicksForSequence - currentTrackTick),
+                    wait: 'T' + (totalTicks - currentTrackTick),
                     duration: 'T0',
                     velocity: 0
                 }));
