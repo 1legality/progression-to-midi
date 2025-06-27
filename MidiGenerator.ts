@@ -180,6 +180,7 @@ export interface MidiGenerationOptions {
     tempo: number;
     velocity: number;
     totalSteps?: number; // <-- Add this for step sequencer
+    totalBars?: number;  // <-- Add this for step sequencer (bars)
 }
 
 export interface MidiGenerationResult {
@@ -485,8 +486,7 @@ export class MidiGenerator {
             baseOctave,
             chordDurationStr,
             tempo,
-            velocity,
-            totalSteps // <-- Add this for step sequencer
+            velocity
         } = options;
 
         if (!progressionString || progressionString.trim() === '') {
@@ -501,65 +501,66 @@ export class MidiGenerator {
             finalFileName = `${sanitizedProgressionString}_${String(outputType)}_${String(inversionType)}.mid`;
         }
 
+        // Only declare totalSteps and totalBars once, at the top
+        const totalSteps = options.totalSteps || 16;
+        const totalBars = options.totalBars || 4;
+        let stepTicks = TPQN; // default: 1 quarter note per step
+        if (options.outputType === 'notesOnly' && totalSteps && totalBars) {
+            stepTicks = (TPQN * 4 * totalBars) / totalSteps;
+        }
+
         // --- Special handling for notesOnly mode ---
         if (outputType === 'notesOnly') {
-            // Each entry: note:P#:L#:V# (e.g. C4:P1:L1:V100)
-            const noteEntries = progressionString.trim().split(/\s+/);
-            interface NoteEvent { midiNote: number; startStep: number; length: number; velocity: number; }
-            const events: NoteEvent[] = [];
-            let maxStep = 0;
-            for (const entry of noteEntries) {
-                // Format: NOTE:P#:L#:V#
-                const parts = entry.split(':');
-                let note = 'C4';
+            // Parse progressionString into note events
+            const notesForPianoRoll: NoteData[] = [];
+            const parts = options.progressionString.split(/\s+/).filter(Boolean);
+            for (const part of parts) {
+                // Format: NoteOrMidi:P#:L#:V#
+                const tokens = part.split(':');
+                let midiNote: number | null = null;
                 let pos = 0;
                 let len = 1;
-                let vel = velocity;
-                for (const part of parts) {
-                    if (/^[A-G][#b]?\d+$|^\d+$/.test(part)) note = part;
-                    else if (/^P(\d+)$/i.test(part)) pos = parseInt(part.slice(1), 10) - 1;
-                    else if (/^L(\d+)$/i.test(part)) len = parseInt(part.slice(1), 10);
-                    else if (/^V(\d+)$/i.test(part)) vel = parseInt(part.slice(1), 10);
-                }
-                const noteNameMatch = note.match(/^([A-G][#b]?)(\d+)$/i);
-                let midiNote: number | null = null;
-                if (noteNameMatch) {
-                    const noteName = noteNameMatch[1];
-                    const octave = parseInt(noteNameMatch[2], 10);
-                    midiNote = this.getMidiNote(noteName, octave);
-                } else if (/^\d+$/.test(note)) {
-                    midiNote = parseInt(note, 10);
+                let vel = options.velocity || 100;
+                for (const token of tokens) {
+                    if (/^[A-G][#b]?\d+$|^\d+$/.test(token)) {
+                        if (/^\d+$/.test(token)) {
+                            midiNote = parseInt(token, 10);
+                        } else {
+                            const m = token.match(/^([A-G][#b]?)(\d+)$/i);
+                            if (m) midiNote = this.getMidiNote(m[1], parseInt(m[2], 10));
+                        }
+                    } else if (/^P(\d+)$/i.test(token)) {
+                        pos = parseInt(token.slice(1), 10) - 1;
+                    } else if (/^L(\d+)$/i.test(token)) {
+                        len = parseInt(token.slice(1), 10);
+                    } else if (/^V(\d+)$/i.test(token)) {
+                        vel = parseInt(token.slice(1), 10);
+                    }
                 }
                 if (midiNote === null) continue;
-                // Only add one event per note (at its start position, with its full length)
-                events.push({ midiNote, startStep: pos, length: len, velocity: vel });
-            console.log(`MidiGenerator: Parsed note: ${note}, midiNote: ${midiNote}, startStep: ${pos}, length: ${len}, velocity: ${vel}`);
-                if (pos + len > maxStep) maxStep = pos + len;
-            }
-            // --- Use totalSteps if provided, else fallback to maxStep or 16 ---
-            let gridSteps = maxStep;
-            if (options.totalSteps && options.totalSteps > 0) {
-                gridSteps = options.totalSteps;
-            } else if (gridSteps < 16) {
-                gridSteps = 16;
+                notesForPianoRoll.push({
+                    midiNote,
+                    startTimeTicks: pos * stepTicks,
+                    durationTicks: len * stepTicks,
+                    velocity: vel
+                });
             }
             // Build MIDI
             const TPQN = 128;
             // Calculate stepTicks so that the total number of steps fits into one 4/4 bar.
-            const stepTicks = (TPQN * 4) / gridSteps; // e.g., for 16 steps, each step is a 16th note.
+            let stepTicksFinal = (TPQN * 4) / totalSteps; // e.g., for 16 steps, each step is a 16th note.
             const track = new midiWriterJs.Track();
             track.setTempo(tempo);
             track.setTimeSignature(4, 4, 24, 8);
-            const notesForPianoRoll: NoteData[] = [];
             // Add each event as a single note with its full length
             // Sort events by startStep to ensure correct timing
-            events.sort((a, b) => a.startStep - b.startStep);
+            notesForPianoRoll.sort((a, b) => a.startTimeTicks - b.startTimeTicks);
 
             let currentTrackTick = 0; // Explicitly manage the track's current time position
 
-            for (const ev of events) {
-                const startTick = ev.startStep * stepTicks;
-                const durationTick = ev.length * stepTicks;
+            for (const ev of notesForPianoRoll) {
+                const startTick = ev.startTimeTicks;
+                const durationTick = ev.durationTicks;
 
                 // Calculate the wait time needed to reach the note's desired absolute start position.
                 // This is the difference between the desired start time and the current track time.
@@ -585,16 +586,10 @@ export class MidiGenerator {
                     duration: 'T' + durationTick,
                     velocity: ev.velocity
                 }));
-                notesForPianoRoll.push({
-                    midiNote: ev.midiNote,
-                    startTimeTicks: startTick,
-                    durationTicks: durationTick,
-                    velocity: ev.velocity
-                });
                 currentTrackTick += durationTick; // Advance track position by the note's duration
             }
             // Add a final rest/wait event to fill the grid to totalSteps (not maxStep)
-            const totalTicks = gridSteps * stepTicks;
+            const totalTicks = totalSteps * stepTicksFinal;
             if (currentTrackTick < totalTicks) {
                 track.addEvent(new midiWriterJs.NoteEvent({
                     pitch: [],

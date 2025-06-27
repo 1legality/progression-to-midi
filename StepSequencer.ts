@@ -84,18 +84,22 @@ export function setupStepSequencerUI() {
     let tempo = 120;
 
     function parseNoteSequenceInput(): void {
-        // Parse for | S[steps]:B[bpm] at the end
+        // Parse for | S[steps]:SPB[bars]:BPM[tempo] at the end
         let input = noteSequenceInput!.value.trim();
-        let stepsMatch = input.match(/\|\s*S(\d+)(?::?B(\d+))?$/i);
+        let stepsMatch = input.match(/\|\s*S(\d+)(?::SPB(\d+))?(?::BPM(\d+))?$/i);
+        let totalBars = 4; // default
         if (stepsMatch) {
             totalSteps = parseInt(stepsMatch[1], 10);
-            if (stepsMatch[2]) tempo = parseInt(stepsMatch[2], 10);
-            input = input.replace(/\|\s*S\d+(?::?B\d+)?$/i, '').trim();
+            if (stepsMatch[2]) totalBars = parseInt(stepsMatch[2], 10);
+            if (stepsMatch[3]) tempo = parseInt(stepsMatch[3], 10);
+            input = input.replace(/\|\s*S\d+(?::SPB\d+)?(?::BPM\d+)?$/i, '').trim();
         } else {
             // Default values if not provided
             totalSteps = 16;
             tempo = 120;
+            totalBars = 4;
         }
+        (parseNoteSequenceInput as any).totalBars = totalBars;
         sequencer = new StepSequencer(totalSteps);
         // Accept both single-line (space-separated) and multi-line (newline-separated) input
         const lines = input.split(/\s+/).map(l => l.trim()).filter(Boolean);
@@ -129,8 +133,8 @@ export function setupStepSequencerUI() {
         }
         // Build notesForPianoRoll for the drawer (preserve note lengths)
         const TPQN = 128;
-        // Calculate stepTicks so that the total number of steps fits into one 4/4 bar.
-        const stepTicks = (TPQN * 4) / totalSteps; // e.g., for 16 steps, each step is a 16th note.
+        // Calculate stepTicks so that the total number of steps fits into totalBars bars.
+        const stepTicks = (TPQN * 4 * totalBars) / totalSteps;
         notesForPianoRoll = [];
         for (const ev of events) {
             notesForPianoRoll.push({
@@ -164,6 +168,7 @@ export function setupStepSequencerUI() {
                 statusDiv!.className = 'mt-4 text-center text-danger';
                 return;
             }
+            const totalBars = (parseNoteSequenceInput as any).totalBars || 4;
             const options = {
                 progressionString,
                 outputFileName: outputFileNameInput!.value || 'sequence.mid',
@@ -173,7 +178,8 @@ export function setupStepSequencerUI() {
                 chordDurationStr: undefined,
                 tempo: tempo,
                 velocity: 100,
-                totalSteps: totalSteps // Pass total steps from parsed input
+                totalSteps: totalSteps, // Pass total steps from parsed input
+                totalBars: totalBars    // Pass total bars if provided
             };
             const result = midiGenerator.generate(options);
             const blob = result.midiBlob;
