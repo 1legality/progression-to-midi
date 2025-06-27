@@ -74,7 +74,11 @@ This application now runs entirely in your browser after a build step.
   - This means E3 starts at step 1 for 2 steps at velocity 110, G3 starts at step 3 for 1 step at velocity 90.
 - **Input:**
   - You can enter notes separated by spaces or newlines.
-  - The total number of steps is set in the "Total Steps" field.
+  - **At the end of your sequence, you can add:**
+    - `| S[steps]:SPB[bars]:BPM[tempo]` (e.g., `| S256:SPB16:BPM120`)
+    - `S` = total steps, `SPB` = total bars, `BPM` = tempo
+    - If not provided, defaults are 16 steps, 4 bars, and 120 BPM.
+  - This allows you to create sequences that fill any number of bars, not just one bar.
 
 **Tip:**
 - For both modes, you can copy and paste progressions or sequences from your favorite AI or DAW, then adjust as needed.
