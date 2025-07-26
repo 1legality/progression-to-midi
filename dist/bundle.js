@@ -1806,6 +1806,16 @@
                   console.warn(`No valid bass note could be determined for "${chordData.symbol}". Adding rest.`);
                 }
                 break;
+              case "bassAndFifth":
+                if (chordData.calculatedBassNote !== null) {
+                  const fifth = chordData.calculatedBassNote + 7;
+                  eventMidiNotes = [chordData.calculatedBassNote];
+                  if (fifth >= 0 && fifth <= 127) eventMidiNotes.push(fifth);
+                } else {
+                  eventMidiNotes = [];
+                  console.warn(`No valid bass note for "${chordData.symbol}". Adding rest.`);
+                }
+                break;
             }
             eventMidiNotes = eventMidiNotes.filter((note) => note >= 0 && note <= 127).sort((a, b) => a - b);
             eventMidiNotes = [...new Set(eventMidiNotes)];

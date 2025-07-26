@@ -167,7 +167,7 @@ export const TPQN = 128; // MIDI Writer JS default ticks per quarter note
 const OCTAVE_ADJUSTMENT_THRESHOLD = 6; // Adjust if average pitch is > 6 semitones (half octave) away from target
 
 // Define the possible output types
-export type OutputType = 'chordsOnly' | 'chordsAndBass' | 'bassOnly' | 'notesOnly';
+export type OutputType = 'chordsOnly' | 'chordsAndBass' | 'bassOnly' | 'notesOnly' | 'bassAndFifth';
 export type InversionType = 'none' | 'first' | 'smooth' | 'pianist' | 'open' | 'spread' | 'cocktail';
 
 export interface MidiGenerationOptions {
@@ -822,6 +822,16 @@ export class MidiGenerator {
                     } else {
                         eventMidiNotes = []; // No valid bass note found
                         console.warn(`No valid bass note could be determined for "${chordData.symbol}". Adding rest.`);
+                    }
+                    break;
+                case 'bassAndFifth':
+                    if (chordData.calculatedBassNote !== null) {
+                        const fifth = chordData.calculatedBassNote + 7;
+                        eventMidiNotes = [chordData.calculatedBassNote];
+                        if (fifth >= 0 && fifth <= 127) eventMidiNotes.push(fifth);
+                    } else {
+                        eventMidiNotes = [];
+                        console.warn(`No valid bass note for "${chordData.symbol}". Adding rest.`);
                     }
                     break;
             }
