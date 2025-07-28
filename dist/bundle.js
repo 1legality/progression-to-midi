@@ -1647,6 +1647,21 @@
             const chordSymbol = parts[0];
             const durationString = parts.length > 1 ? parts[1] : chordDurationStr;
             const currentChordDurationTicks = this.getDurationTicks(durationString);
+            if (chordSymbol.toUpperCase() === "R") {
+              generatedChords.push({
+                symbol: "R",
+                startTimeTicks: currentTick,
+                durationTicks: currentChordDurationTicks,
+                initialVoicing: [],
+                adjustedVoicing: [],
+                rootNoteName: "",
+                isValid: false,
+                calculatedBassNote: null
+              });
+              currentTick += currentChordDurationTicks;
+              previousChordVoicing = null;
+              continue;
+            }
             const match = chordSymbol.match(chordRegex);
             let chordData = {
               symbol: chordSymbol,
@@ -1784,7 +1799,7 @@
           const notesForPianoRoll = [];
           for (const chordData of generatedChords) {
             if (!chordData.isValid) {
-              track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordData.durationTicks, duration: "T0", velocity: 0 }));
+              track.addEvent(new import_midi_writer_js.default.NoteEvent({ wait: "T" + chordData.durationTicks }));
               continue;
             }
             let eventMidiNotes = [];
@@ -2290,6 +2305,8 @@
           modalContent += "</tbody>";
           modalContent += "</table>";
           modalContent += "<hr>";
+          modalContent += "<h5>Rests</h5>";
+          modalContent += "<p>Add a rest (silence) using <code>R:duration</code> (e.g., <code>R:1</code> for a one-bar rest). Rests can be placed anywhere in the progression.</p>";
           modalContent += "<h5>Known Chord Qualities</h5>";
           modalContent += "<p>The following chord qualities are recognized (case-insensitive). Chord symbols are generally <code>[RootNote][Quality]</code> (e.g., C, Cm, Cmaj7, Gsus, F#dim7). Root notes can be A-G, optionally followed by # (sharp) or b (flat).</p>";
           modalContent += '<table class="table table-bordered">';
@@ -2441,6 +2458,13 @@
         const parts = entry.split(":");
         const chordSymbol = parts[0];
         const durationStr = parts.length > 1 ? parts[1] : void 0;
+        if (chordSymbol.toUpperCase() === "R") {
+          if (durationStr === void 0 || isNaN(parseFloat(durationStr)) || parseFloat(durationStr) <= 0) {
+            throw new Error(`Rest "R" must have a positive duration (e.g., R:1 for one bar rest).`);
+          }
+          validatedEntries.push(entry);
+          continue;
+        }
         if (!validChordSymbolPattern.test(chordSymbol)) {
           throw new Error(`Invalid chord symbol: "${chordSymbol}" in entry "${entry}". Use formats like C, Cm, G7.`);
         }

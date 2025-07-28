@@ -107,6 +107,16 @@ export function setupChordProgressionSequencer() {
             const chordSymbol = parts[0];
             const durationStr = parts.length > 1 ? parts[1] : undefined;
 
+            // Accept R as a valid rest symbol
+            if (chordSymbol.toUpperCase() === 'R') {
+                // Accept any positive duration for rest
+                if (durationStr === undefined || isNaN(parseFloat(durationStr)) || parseFloat(durationStr) <= 0) {
+                    throw new Error(`Rest "R" must have a positive duration (e.g., R:1 for one bar rest).`);
+                }
+                validatedEntries.push(entry);
+                continue;
+            }
+
             if (!validChordSymbolPattern.test(chordSymbol)) {
                 throw new Error(`Invalid chord symbol: "${chordSymbol}" in entry "${entry}". Use formats like C, Cm, G7.`);
             }
