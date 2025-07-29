@@ -43,6 +43,10 @@ export class ChordInfoModal {
 
         modalContent += '<hr>'; // Separator
 
+        // --- Rest Syntax Section ---
+        modalContent += '<h5>Rests</h5>';
+        modalContent += '<p>Add a rest (silence) using <code>R:duration</code> (e.g., <code>R:1</code> for a one-bar rest). Rests can be placed anywhere in the progression.</p>';
+
         // --- Known Chord Formulas Section ---
         modalContent += '<h5>Known Chord Qualities</h5>';
         modalContent += '<p>The following chord qualities are recognized (case-insensitive). Chord symbols are generally <code>[RootNote][Quality]</code> (e.g., C, Cm, Cmaj7, Gsus, F#dim7). Root notes can be A-G, optionally followed by # (sharp) or b (flat).</p>';

@@ -179,8 +179,8 @@ export interface MidiGenerationOptions {
     chordDurationStr?: string; // Optional, provide default
     tempo: number;
     velocity: number;
-    totalSteps?: number; // <-- Add this for step sequencer
-    totalBars?: number;  // <-- Add this for step sequencer (bars)
+    totalSteps?: number;
+    totalBars?: number;
 }
 
 export interface MidiGenerationResult {
@@ -605,7 +605,7 @@ export class MidiGenerator {
         }
 
         // const chordDurationTicks = this.getDurationTicks(chordDurationStr); // OLD
-        const chordEntries = progressionString.trim().split(/\s+/); // NEW: e.g., ["Am:0.5", "G:1", "C"]
+        const chordEntries = progressionString.trim().split(/\s+/); // NEW: e.g., ["Am:0.5", "G:1", "C", "R:1"]
         const chordRegex = /^([A-G][#b]?)(.*)$/;
 
         const generatedChords: ChordGenerationData[] = [];
@@ -621,8 +621,25 @@ export class MidiGenerator {
             const chordSymbol = parts[0];
             // Use duration from entry, or fallback to chordDurationStr, or undefined
             const durationString = parts.length > 1 ? parts[1] : chordDurationStr;
-
             const currentChordDurationTicks = this.getDurationTicks(durationString);
+
+            // --- REST HANDLING ---
+            if (chordSymbol.toUpperCase() === 'R') {
+                // Treat as a rest: no notes, just advance time
+                generatedChords.push({
+                    symbol: 'R',
+                    startTimeTicks: currentTick,
+                    durationTicks: currentChordDurationTicks,
+                    initialVoicing: [],
+                    adjustedVoicing: [],
+                    rootNoteName: '',
+                    isValid: false,
+                    calculatedBassNote: null
+                });
+                currentTick += currentChordDurationTicks;
+                previousChordVoicing = null;
+                continue;
+            }
 
             const match = chordSymbol.match(chordRegex);
             let chordData: ChordGenerationData = {
@@ -855,6 +872,7 @@ export class MidiGenerator {
                 // Add MIDI event
                 track.addEvent(new midiWriterJs.NoteEvent({
                     pitch: eventMidiNotes,
+                    tick: chordData.startTimeTicks,
                     duration: 'T' + chordData.durationTicks,
                     velocity: velocity
                 }));
