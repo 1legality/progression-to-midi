@@ -1798,8 +1798,8 @@
           track.setTimeSignature(4, 4, 24, 8);
           const notesForPianoRoll = [];
           for (const chordData of generatedChords) {
-            if (chordData.symbol === "R") {
-              track.addEvent(new import_midi_writer_js.default.NoteEvent({ wait: "T" + chordData.durationTicks }));
+            if (!chordData.isValid) {
+              track.addEvent(new import_midi_writer_js.default.NoteEvent({ pitch: [], wait: "T" + chordData.durationTicks, duration: "T0", velocity: 0 }));
               continue;
             }
             let eventMidiNotes = [];

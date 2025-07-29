@@ -814,9 +814,9 @@ export class MidiGenerator {
         const notesForPianoRoll: NoteData[] = [];
 
         for (const chordData of generatedChords) {
-            if (chordData.symbol === "R") {
-                // Add a rest as a wait event to create a gap in the MIDI file (same as step sequencer logic)
-                track.addEvent(new midiWriterJs.NoteEvent({ wait: 'T' + chordData.durationTicks }));
+            if (!chordData.isValid) {
+                // Add a rest if the chord symbol was invalid
+                track.addEvent(new midiWriterJs.NoteEvent({ pitch: [], wait: 'T' + chordData.durationTicks, duration: 'T0', velocity: 0 }));
                 continue;
             }
 
