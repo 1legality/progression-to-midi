@@ -26,5 +26,8 @@ export function generateValidChordPattern(): RegExp {
         .map(q => q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
         .sort((a, b) => b.length - a.length)
         .join('|');
-    return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?$`, 'i');
+
+    // Accept optional quality and optional "/Bass" (e.g., Cmaj7/G)
+    // Final pattern: ^(Note)(OptionalQuality)?(?:/(Note))?$
+    return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?(?:\\/(${notePattern}))?$`, 'i');
 }
