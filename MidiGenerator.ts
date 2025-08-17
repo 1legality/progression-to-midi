@@ -626,7 +626,6 @@ export class MidiGenerator {
             return { notesForPianoRoll, midiBlob, finalFileName, chordDetails: [] };
         }
 
-        // const chordDurationTicks = this.getDurationTicks(chordDurationStr); // OLD
         const chordEntries = progressionString.trim().split(/\s+/); // e.g., ["Am:0.5", "G:1", "C/G", "R:1"]
         // Capture: root, quality/extensions (not including slash), optional "/bassRoot"
         const chordRegex = /^([A-G][#b]?)([^\/]*)(?:\/([A-G][#b]?))?$/;
