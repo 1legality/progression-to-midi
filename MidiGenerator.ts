@@ -200,6 +200,7 @@ interface ChordGenerationData {
     rootNoteName: string;
     isValid: boolean;
     calculatedBassNote: number | null; // Store the calculated bass note
+    explicitBassRoot?: string; // NEW: stores explicit bass root if user wrote C/G
 }
 
 export class MidiGenerator {
@@ -605,8 +606,9 @@ export class MidiGenerator {
         }
 
         // const chordDurationTicks = this.getDurationTicks(chordDurationStr); // OLD
-        const chordEntries = progressionString.trim().split(/\s+/); // NEW: e.g., ["Am:0.5", "G:1", "C", "R:1"]
-        const chordRegex = /^([A-G][#b]?)(.*)$/;
+        const chordEntries = progressionString.trim().split(/\s+/); // e.g., ["Am:0.5", "G:1", "C/G", "R:1"]
+        // Capture: root, quality/extensions (not including slash), optional "/bassRoot"
+        const chordRegex = /^([A-G][#b]?)([^\/]*)(?:\/([A-G][#b]?))?$/;
 
         const generatedChords: ChordGenerationData[] = [];
         let currentTick = 0;
@@ -650,7 +652,8 @@ export class MidiGenerator {
                 adjustedVoicing: [],
                 rootNoteName: '',
                 isValid: false,
-                calculatedBassNote: null // Initialize bass note
+                calculatedBassNote: null, // Initialize bass note
+                explicitBassRoot: undefined
             };
 
             if (!match) {
@@ -662,8 +665,10 @@ export class MidiGenerator {
             }
 
             const rootNoteName = match[1];
-            let qualityAndExtensions = match[2];
+            let qualityAndExtensions = (match[2] || '').trim();
+            const explicitBass = match[3] ? match[3].trim() : undefined;
             chordData.rootNoteName = rootNoteName;
+            if (explicitBass) chordData.explicitBassRoot = explicitBass;
 
             try {
                 const rootMidi = this.getMidiNote(rootNoteName, baseOctave);
@@ -794,17 +799,37 @@ export class MidiGenerator {
             cd.adjustedVoicing = (finalVoicings[index] || []).sort((a, b) => a - b);
             // Calculate and store the bass note needed for Step 3
             if (cd.isValid) {
-                cd.calculatedBassNote = this.calculateBassNote(
-                    cd,
-                    baseOctave,
-                    inversionType,
-                    previousBassNote,
-                    outputType,
-                    cd.adjustedVoicing // <-- Pass the adjusted voicing here
-                );
-                previousBassNote = cd.calculatedBassNote; // Update previous bass note
-            }
-        });
+                // If an explicit bass root (slash chord) was provided, honor it (try preferred octaves).
+                if (cd.explicitBassRoot) {
+                    let explicitMidi: number | null = null;
+                    const preferredOctaves = [baseOctave - 1, baseOctave - 2, baseOctave]; // try these in order
+                    for (const oct of preferredOctaves) {
+                        try {
+                            const m = this.getMidiNote(cd.explicitBassRoot, oct);
+                            if (m >= 0 && m <= 127) {
+                                // prefer an octave that doesn't exactly duplicate chord voicing
+                                if (!cd.adjustedVoicing.includes(m)) { explicitMidi = m; break; }
+                                if (explicitMidi === null) explicitMidi = m; // fallback if all collide
+                            }
+                        } catch (e) {
+                            // ignore and try next octave
+                        }
+                    }
+                    cd.calculatedBassNote = explicitMidi;
+                    previousBassNote = cd.calculatedBassNote;
+                } else {
+                    cd.calculatedBassNote = this.calculateBassNote(
+                        cd,
+                        baseOctave,
+                        inversionType,
+                        previousBassNote,
+                        outputType,
+                        cd.adjustedVoicing // <-- Pass the adjusted voicing here
+                    );
+                    previousBassNote = cd.calculatedBassNote; // Update previous bass note
+                }
+             }
+         });
 
 
         // --- Step 3: Build MIDI Track and Piano Roll Data from Final Voicings ---

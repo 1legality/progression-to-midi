@@ -1636,7 +1636,7 @@
             return { notesForPianoRoll: notesForPianoRoll2, midiBlob: midiBlob2, finalFileName, chordDetails: [] };
           }
           const chordEntries = progressionString.trim().split(/\s+/);
-          const chordRegex = /^([A-G][#b]?)(.*)$/;
+          const chordRegex = /^([A-G][#b]?)([^\/]*)(?:\/([A-G][#b]?))?$/;
           const generatedChords = [];
           let currentTick = 0;
           let previousChordVoicing = null;
@@ -1671,8 +1671,9 @@
               adjustedVoicing: [],
               rootNoteName: "",
               isValid: false,
-              calculatedBassNote: null
+              calculatedBassNote: null,
               // Initialize bass note
+              explicitBassRoot: void 0
             };
             if (!match) {
               console.warn(`Could not parse chord symbol: "${chordSymbol}" in entry "${entry}". Skipping.`);
@@ -1682,8 +1683,10 @@
               continue;
             }
             const rootNoteName = match[1];
-            let qualityAndExtensions = match[2];
+            let qualityAndExtensions = (match[2] || "").trim();
+            const explicitBass = match[3] ? match[3].trim() : void 0;
             chordData.rootNoteName = rootNoteName;
+            if (explicitBass) chordData.explicitBassRoot = explicitBass;
             try {
               const rootMidi = this.getMidiNote(rootNoteName, baseOctave);
               let formulaIntervals = CHORD_FORMULAS[qualityAndExtensions];
@@ -1781,16 +1784,36 @@
           generatedChords.forEach((cd, index) => {
             cd.adjustedVoicing = (finalVoicings[index] || []).sort((a, b) => a - b);
             if (cd.isValid) {
-              cd.calculatedBassNote = this.calculateBassNote(
-                cd,
-                baseOctave,
-                inversionType,
-                previousBassNote,
-                outputType,
-                cd.adjustedVoicing
-                // <-- Pass the adjusted voicing here
-              );
-              previousBassNote = cd.calculatedBassNote;
+              if (cd.explicitBassRoot) {
+                let explicitMidi = null;
+                const preferredOctaves = [baseOctave - 1, baseOctave - 2, baseOctave];
+                for (const oct of preferredOctaves) {
+                  try {
+                    const m = this.getMidiNote(cd.explicitBassRoot, oct);
+                    if (m >= 0 && m <= 127) {
+                      if (!cd.adjustedVoicing.includes(m)) {
+                        explicitMidi = m;
+                        break;
+                      }
+                      if (explicitMidi === null) explicitMidi = m;
+                    }
+                  } catch (e) {
+                  }
+                }
+                cd.calculatedBassNote = explicitMidi;
+                previousBassNote = cd.calculatedBassNote;
+              } else {
+                cd.calculatedBassNote = this.calculateBassNote(
+                  cd,
+                  baseOctave,
+                  inversionType,
+                  previousBassNote,
+                  outputType,
+                  cd.adjustedVoicing
+                  // <-- Pass the adjusted voicing here
+                );
+                previousBassNote = cd.calculatedBassNote;
+              }
             }
           });
           const track = new import_midi_writer_js.default.Track();
@@ -2308,6 +2331,9 @@
           modalContent += "<hr>";
           modalContent += "<h5>Rests</h5>";
           modalContent += "<p>Add a rest (silence) using <code>R:duration</code> (e.g., <code>R:1</code> for a one-bar rest). Rests can be placed anywhere in the progression.</p>";
+          modalContent += "<h5>Slash Chords / Explicit Bass</h5>";
+          modalContent += "<p>Specify an explicit bass note after a slash to force the bass (e.g., <code>C/G</code> plays C major with G in the bass). The generator will try typical bass octaves and avoid exact duplication of chord tones when possible.</p>";
+          modalContent += "<p><strong>Examples:</strong> <code>C/G:1</code>, <code>Am/C:0.5</code>, <code>F/A:2</code></p>";
           modalContent += "<h5>Known Chord Qualities</h5>";
           modalContent += "<p>The following chord qualities are recognized (case-insensitive). Chord symbols are generally <code>[RootNote][Quality]</code> (e.g., C, Cm, Cmaj7, Gsus, F#dim7). Root notes can be A-G, optionally followed by # (sharp) or b (flat).</p>";
           modalContent += '<table class="table table-bordered">';
@@ -2341,7 +2367,7 @@
   function generateValidChordPattern() {
     const notePattern = ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION.join("|");
     const qualitiesPattern = Object.keys(CHORD_FORMULAS).filter((q) => q).map((q) => q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).sort((a, b) => b.length - a.length).join("|");
-    return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?$`, "i");
+    return new RegExp(`^(${notePattern})(?:(${qualitiesPattern}))?(?:\\/(${notePattern}))?$`, "i");
   }
   var ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION, VALID_DURATION_CODES;
   var init_ValidationUtils = __esm({
