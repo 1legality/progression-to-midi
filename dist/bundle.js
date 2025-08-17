@@ -1528,6 +1528,22 @@
           }
           return chosenBassNote;
         }
+        // Helper to produce a Blob from the writer.buildFile() result in a TypeScript-friendly way
+        buildMidiBlob(midiDataBytes) {
+          if (typeof Uint8Array !== "undefined" && midiDataBytes instanceof Uint8Array) {
+            const copy = new Uint8Array(midiDataBytes.length);
+            copy.set(midiDataBytes);
+            return new Blob([copy], { type: "audio/midi" });
+          }
+          if (midiDataBytes && (midiDataBytes instanceof ArrayBuffer || ArrayBuffer.isView(midiDataBytes))) {
+            return new Blob([midiDataBytes], { type: "audio/midi" });
+          }
+          try {
+            return new Blob([midiDataBytes], { type: "audio/midi" });
+          } catch (e) {
+            return new Blob([String(midiDataBytes)], { type: "text/plain" });
+          }
+        }
         /**
          * Generates MIDI data and note array from provided options.
          * @param options - The settings for MIDI generation.
@@ -1632,7 +1648,7 @@
             }
             const writer2 = new import_midi_writer_js.default.Writer([track2]);
             const midiDataBytes2 = writer2.buildFile();
-            const midiBlob2 = new Blob([midiDataBytes2], { type: "audio/midi" });
+            const midiBlob2 = this.buildMidiBlob(midiDataBytes2);
             return { notesForPianoRoll: notesForPianoRoll2, midiBlob: midiBlob2, finalFileName, chordDetails: [] };
           }
           const chordEntries = progressionString.trim().split(/\s+/);
@@ -1881,7 +1897,7 @@
           }
           const writer = new import_midi_writer_js.default.Writer([track]);
           const midiDataBytes = writer.buildFile();
-          const midiBlob = new Blob([midiDataBytes], { type: "audio/midi" });
+          const midiBlob = this.buildMidiBlob(midiDataBytes);
           return { notesForPianoRoll, midiBlob, finalFileName, chordDetails: generatedChords };
         }
       };

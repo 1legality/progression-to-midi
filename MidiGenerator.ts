@@ -472,6 +472,27 @@ export class MidiGenerator {
         return chosenBassNote;
     }
 
+    // Helper to produce a Blob from the writer.buildFile() result in a TypeScript-friendly way
+    private buildMidiBlob(midiDataBytes: any): Blob {
+        // midi-writer-js may return a Uint8Array or another binary-like type.
+        if (typeof Uint8Array !== 'undefined' && midiDataBytes instanceof Uint8Array) {
+            // Create a proper Uint8Array copy (ensures underlying buffer is a standard ArrayBuffer)
+            const copy = new Uint8Array(midiDataBytes.length);
+            copy.set(midiDataBytes);
+            return new Blob([copy], { type: 'audio/midi' });
+        }
+        // If it's an ArrayBuffer or ArrayBufferView, pass it directly
+        if (midiDataBytes && (midiDataBytes instanceof ArrayBuffer || ArrayBuffer.isView(midiDataBytes))) {
+            return new Blob([midiDataBytes as any], { type: 'audio/midi' });
+        }
+        // Fallback: convert to string or wrap as-is
+        try {
+            return new Blob([midiDataBytes as any], { type: 'audio/midi' });
+        } catch (e) {
+            // Final fallback: stringify
+            return new Blob([String(midiDataBytes)], { type: 'text/plain' });
+        }
+    }
 
     /**
      * Generates MIDI data and note array from provided options.
@@ -601,7 +622,7 @@ export class MidiGenerator {
             }
             const writer = new midiWriterJs.Writer([track]);
             const midiDataBytes = writer.buildFile();
-            const midiBlob = new Blob([midiDataBytes], { type: 'audio/midi' });
+            const midiBlob = this.buildMidiBlob(midiDataBytes);
             return { notesForPianoRoll, midiBlob, finalFileName, chordDetails: [] };
         }
 
@@ -914,7 +935,7 @@ export class MidiGenerator {
         // --- Step 4: Generate MIDI Blob ---
         const writer = new midiWriterJs.Writer([track]);
         const midiDataBytes = writer.buildFile();
-        const midiBlob = new Blob([midiDataBytes], { type: 'audio/midi' });
+        const midiBlob = this.buildMidiBlob(midiDataBytes);
 
         return { notesForPianoRoll, midiBlob, finalFileName, chordDetails: generatedChords };
     }
