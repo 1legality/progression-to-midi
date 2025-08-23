@@ -71,7 +71,36 @@ export function generatePdfProgression(
             }
         }
 
-        const active = (cd && cd.adjustedVoicing) ? cd.adjustedVoicing : [];
+        const activeRaw = (cd && cd.adjustedVoicing) ? cd.adjustedVoicing : [];
+
+        // Map notes to the 3-octave printable view:
+        // - bass note -> baseOctave (first octave)
+        // - chord tones -> baseOctave+1 and baseOctave+2 (alternate for visibility)
+        const activeSet = new Set<number>();
+        if (activeRaw.length > 0) {
+            // Prefer explicit calculated bass if provided in chordDetails
+            const possibleBass = (cd as any).calculatedBassNote ?? Math.min(...activeRaw);
+            const bassName = getNoteNameFromMidi(possibleBass).replace(/\d+/g, '');
+            activeSet.add(getMidiNote(bassName, baseOctave));
+
+            // Collect chord tone pitch classes excluding the chosen bass pitch-class
+            const chordTones = activeRaw.filter(m => m !== possibleBass);
+            const seenPC = new Set<number>();
+            const chordPCs: number[] = [];
+            chordTones.forEach(m => {
+                const pc = m % 12;
+                if (!seenPC.has(pc)) { seenPC.add(pc); chordPCs.push(pc); }
+            });
+
+            // Map chord pitch-classes into octave +1 and +2 alternating for spread and visibility
+            chordPCs.forEach((pc, idx) => {
+                const octaveOffset = 1 + (idx % 2); // 1 or 2
+                const name = NOTES[pc];
+                activeSet.add(getMidiNote(name, baseOctave + octaveOffset));
+            });
+        }
+
+        const active = Array.from(activeSet);
 
         // Draw white keys
         for (let m = midiStart; m <= midiEnd; m++) {

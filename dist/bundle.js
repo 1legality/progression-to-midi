@@ -29994,7 +29994,29 @@
           whiteIndex++;
         }
       }
-      const active = cd && cd.adjustedVoicing ? cd.adjustedVoicing : [];
+      const activeRaw = cd && cd.adjustedVoicing ? cd.adjustedVoicing : [];
+      const activeSet = /* @__PURE__ */ new Set();
+      if (activeRaw.length > 0) {
+        const possibleBass = cd.calculatedBassNote ?? Math.min(...activeRaw);
+        const bassName = getNoteNameFromMidi(possibleBass).replace(/\d+/g, "");
+        activeSet.add(getMidiNote(bassName, baseOctave));
+        const chordTones = activeRaw.filter((m4) => m4 !== possibleBass);
+        const seenPC = /* @__PURE__ */ new Set();
+        const chordPCs = [];
+        chordTones.forEach((m4) => {
+          const pc = m4 % 12;
+          if (!seenPC.has(pc)) {
+            seenPC.add(pc);
+            chordPCs.push(pc);
+          }
+        });
+        chordPCs.forEach((pc, idx) => {
+          const octaveOffset = 1 + idx % 2;
+          const name = NOTES[pc];
+          activeSet.add(getMidiNote(name, baseOctave + octaveOffset));
+        });
+      }
+      const active = Array.from(activeSet);
       for (let m4 = midiStart; m4 <= midiEnd; m4++) {
         if (!isBlackKey(m4)) {
           const wx = whitePositions.get(m4);
@@ -30091,6 +30113,7 @@
       "use strict";
       init_jspdf_es_min();
       init_Utils();
+      init_MidiGenerator();
     }
   });
 
