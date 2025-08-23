@@ -4,6 +4,7 @@ import { SynthChordPlayer, ActiveNote } from './SynthChordPlayer';
 import { ChordInfoModal } from './ChordInfoModal';
 import { normalizeNoteName, getMidiNote, getNoteNameFromMidi } from './Utils';
 import { ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION, VALID_DURATION_CODES, generateValidChordPattern } from './ValidationUtils';
+import { wirePrintButton } from './PrintProgression';
 
 // Keep NoteData interface accessible if needed by Main.ts directly
 interface NoteData {
@@ -62,6 +63,14 @@ export function setupChordProgressionSequencer() {
     let lastGeneratedResult: MidiGenerationResult | null = null; // Store the last successful result
     let lastGeneratedNotes: NoteData[] = []; // Store the last generated notes for playback
     let lastGeneratedMidiBlob: Blob | null = null; // Store the generated MIDI blob in memory
+
+    // Wire the print button using the helper in PrintProgression.ts
+    wirePrintButton(() => lastGeneratedResult, {
+        buttonId: 'printProgressionButton',
+        baseOctaveSelectorId: 'baseOctave', 
+        filename: 'progression.pdf',
+        statusElement: statusDiv
+    });
 
     // Ensure the audio context is resumed on user interaction
     const resumeAudioContext = () => synthChordPlayer.ensureContextResumed();
