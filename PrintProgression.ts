@@ -15,7 +15,8 @@ import type { MidiGenerationResult } from './MidiGenerator'; // <-- added import
 export function generatePdfProgression(
     chordDetails: { symbol?: string; adjustedVoicing?: number[] }[],
     baseOctave: number = 4,
-    filename: string = 'chord_progression.pdf'
+    filename: string = 'chord_progression.pdf',
+    progressionText: string = ''
 ): void {
     if (!chordDetails || chordDetails.length === 0) {
         alert('No chord progression available to print.');
@@ -32,8 +33,28 @@ export function generatePdfProgression(
     const cardsPerRow = 3;
     const cardW = (pageW - margin * 2 - gutter * (cardsPerRow - 1)) / cardsPerRow;
     const cardH = 60; // mm tall for keyboard + title
+
+    // Render progression text at top (if provided) as H1-like header
+    let headerHeight = 0;
+    if (progressionText && progressionText.trim().length > 0) {
+        // Use larger bold font for the progression title
+        const titleFontSize = 16; // points
+        const titleLineHeight = titleFontSize * 0.35; // approximate mm per point
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(titleFontSize);
+        doc.setTextColor(30);
+        const lines = doc.splitTextToSize(progressionText, pageW - margin * 2);
+        lines.forEach((line: string, idx: number) => {
+            doc.text(line, pageW / 2, margin + 6 + idx * titleLineHeight, { align: 'center' });
+        });
+        // Restore normal font for the rest of the document
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        headerHeight = lines.length * titleLineHeight + 8; // add small padding below header
+    }
+
     let x = margin;
-    let y = margin;
+    let y = margin + headerHeight; // start below header if present
 
     // Helpers
     const isBlackKey = (midi: number) => [1, 3, 6, 8, 10].includes(midi % 12);
@@ -158,7 +179,7 @@ export function generatePdfProgression(
             if (y + cardH + margin > pageH) {
                 doc.addPage();
                 x = margin;
-                y = margin;
+                y = margin + headerHeight; // reset y to top below header
             }
         }
     });
@@ -207,9 +228,19 @@ export function wirePrintButton(
 
         const baseOctaveInput = document.getElementById(baseOctSel) as HTMLSelectElement | null;
         const baseOctave = baseOctaveInput ? parseInt(baseOctaveInput.value, 10) : 4;
+
+        // Prefer progression stored in the generation result; fall back to the progression input field
+        let progressionText = '';
+        if (result && (result as any).progressionString) {
+            progressionText = (result as any).progressionString;
+        } else {
+            const progInput = document.getElementById('progression') as HTMLInputElement | null;
+            if (progInput) progressionText = progInput.value || '';
+        }
+
         try {
             // generatePdfProgression is defined in this file
-            generatePdfProgression(result.chordDetails, baseOctave, filename);
+            generatePdfProgression(result.chordDetails, baseOctave, filename, progressionText);
             if (statusEl) {
                 statusEl.textContent = 'PDF generated.';
                 statusEl.className = 'mt-4 text-center text-success';

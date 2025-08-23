@@ -29952,7 +29952,7 @@
   });
 
   // PrintProgression.ts
-  function generatePdfProgression(chordDetails, baseOctave = 4, filename = "chord_progression.pdf") {
+  function generatePdfProgression(chordDetails, baseOctave = 4, filename = "chord_progression.pdf", progressionText = "") {
     if (!chordDetails || chordDetails.length === 0) {
       alert("No chord progression available to print.");
       return;
@@ -29965,8 +29965,23 @@
     const cardsPerRow = 3;
     const cardW = (pageW - margin * 2 - gutter * (cardsPerRow - 1)) / cardsPerRow;
     const cardH = 60;
+    let headerHeight = 0;
+    if (progressionText && progressionText.trim().length > 0) {
+      const titleFontSize = 16;
+      const titleLineHeight = titleFontSize * 0.35;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(titleFontSize);
+      doc.setTextColor(30);
+      const lines = doc.splitTextToSize(progressionText, pageW - margin * 2);
+      lines.forEach((line, idx) => {
+        doc.text(line, pageW / 2, margin + 6 + idx * titleLineHeight, { align: "center" });
+      });
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      headerHeight = lines.length * titleLineHeight + 8;
+    }
     let x2 = margin;
-    let y3 = margin;
+    let y3 = margin + headerHeight;
     const isBlackKey = (midi) => [1, 3, 6, 8, 10].includes(midi % 12);
     const midiStart = getMidiNote("C", baseOctave);
     const midiEnd = midiStart + 12 * 3 - 1;
@@ -30062,7 +30077,7 @@
         if (y3 + cardH + margin > pageH) {
           doc.addPage();
           x2 = margin;
-          y3 = margin;
+          y3 = margin + headerHeight;
         }
       }
     });
@@ -30091,8 +30106,15 @@
       }
       const baseOctaveInput = document.getElementById(baseOctSel);
       const baseOctave = baseOctaveInput ? parseInt(baseOctaveInput.value, 10) : 4;
+      let progressionText = "";
+      if (result && result.progressionString) {
+        progressionText = result.progressionString;
+      } else {
+        const progInput = document.getElementById("progression");
+        if (progInput) progressionText = progInput.value || "";
+      }
       try {
-        generatePdfProgression(result.chordDetails, baseOctave, filename);
+        generatePdfProgression(result.chordDetails, baseOctave, filename, progressionText);
         if (statusEl) {
           statusEl.textContent = "PDF generated.";
           statusEl.className = "mt-4 text-center text-success";
