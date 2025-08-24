@@ -72,6 +72,22 @@ export function setupChordProgressionSequencer() {
         statusElement: statusDiv
     });
 
+    // Wire example progression buttons: populate progression input and trigger generation
+    const exampleButtons = document.querySelectorAll<HTMLButtonElement>('.example-prog');
+    if (exampleButtons && exampleButtons.length > 0) {
+        exampleButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const prog = btn.getAttribute('data-prog') || '';
+                const progInput = document.getElementById('progression') as HTMLInputElement | null;
+                if (!progInput) return;
+                progInput.value = prog;
+                // Fire both input and change so listeners in this setup react.
+                progInput.dispatchEvent(new Event('input', { bubbles: true }));
+                progInput.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+    }
+
     // Ensure the audio context is resumed on user interaction
     const resumeAudioContext = () => synthChordPlayer.ensureContextResumed();
     document.addEventListener('click', resumeAudioContext, { once: true });

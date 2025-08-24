@@ -30186,6 +30186,19 @@
       filename: "progression.pdf",
       statusElement: statusDiv
     });
+    const exampleButtons = document.querySelectorAll(".example-prog");
+    if (exampleButtons && exampleButtons.length > 0) {
+      exampleButtons.forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const prog = btn.getAttribute("data-prog") || "";
+          const progInput = document.getElementById("progression");
+          if (!progInput) return;
+          progInput.value = prog;
+          progInput.dispatchEvent(new Event("input", { bubbles: true }));
+          progInput.dispatchEvent(new Event("change", { bubbles: true }));
+        });
+      });
+    }
     const resumeAudioContext = () => synthChordPlayer.ensureContextResumed();
     document.addEventListener("click", resumeAudioContext, { once: true });
     velocitySlider.addEventListener("input", (event) => {
