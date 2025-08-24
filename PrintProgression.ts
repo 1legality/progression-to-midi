@@ -23,16 +23,16 @@ export function generatePdfProgression(
         return;
     }
 
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
 
-    // Layout settings
+    // Layout settings — portrait, one card per row
     const margin = 8;
-    const gutter = 6;
-    const cardsPerRow = 3;
-    const cardW = (pageW - margin * 2 - gutter * (cardsPerRow - 1)) / cardsPerRow;
-    const cardH = 60; // mm tall for keyboard + title
+    const gutter = 8;
+    const cardsPerRow = 1;
+    const cardW = pageW - margin * 2; // full width for one card per line
+    const cardH = 48; // mm tall for keyboard + title (one per line)
 
     // Render progression text at top (if provided) as H1-like header
     let headerHeight = 0;
@@ -169,18 +169,15 @@ export function generatePdfProgression(
 
     // Iterate chords and render cards, creating pages as needed
     chordDetails.forEach((cd, idx) => {
+        // one card per row (full width)
         drawCard(cd, x, y);
-        x += cardW + gutter;
-        if ((idx + 1) % cardsPerRow === 0) {
-            // next row
+        // advance to next line
+        y += cardH + gutter;
+        // new page if needed
+        if (y + cardH + margin > pageH) {
+            doc.addPage();
             x = margin;
-            y += cardH + gutter;
-            // new page if needed
-            if (y + cardH + margin > pageH) {
-                doc.addPage();
-                x = margin;
-                y = margin + headerHeight; // reset y to top below header
-            }
+            y = margin + headerHeight; // reset y to top below header
         }
     });
 

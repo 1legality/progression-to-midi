@@ -64,10 +64,38 @@ export function setupChordProgressionSequencer() {
     let lastGeneratedNotes: NoteData[] = []; // Store the last generated notes for playback
     let lastGeneratedMidiBlob: Blob | null = null; // Store the generated MIDI blob in memory
 
+    // Provide a getter for printing that regenerates using current form values so
+    // the PDF respects Output Type, Inversion, base octave, etc.
+    const getResultForPrint = (): MidiGenerationResult | null => {
+        try {
+            const formData = new FormData(form);
+            const rawProgression = formData.get('progression') as string;
+            const validatedProgression = validateChordProgression(rawProgression);
+
+            const options: MidiGenerationOptions = {
+                progressionString: validatedProgression,
+                outputFileName: formData.get('outputFileName') as string || undefined,
+                outputType: formData.get('outputType') as OutputType,
+                inversionType: formData.get('inversionType') as InversionType,
+                baseOctave: parseInt(formData.get('baseOctave') as string, 10),
+                chordDurationStr: formData.get('chordDuration') as string,
+                tempo: parseInt(formData.get('tempo') as string, 10),
+                velocity: parseInt(formData.get('velocity') as string, 10)
+            };
+
+            // Regenerate using current form options so the printed view matches current settings.
+            return midiGenerator.generate(options);
+        } catch (err) {
+            // If regeneration fails (validation error etc.), fall back to the last successful result.
+            console.warn('Print: failed to regenerate with current form values, falling back to last result.', err);
+            return lastGeneratedResult;
+        }
+    };
+
     // Wire the print button using the helper in PrintProgression.ts
-    wirePrintButton(() => lastGeneratedResult, {
+    wirePrintButton(getResultForPrint, {
         buttonId: 'printProgressionButton',
-        baseOctaveSelectorId: 'baseOctave', 
+        baseOctaveSelectorId: 'baseOctave',
         filename: 'progression.pdf',
         statusElement: statusDiv
     });

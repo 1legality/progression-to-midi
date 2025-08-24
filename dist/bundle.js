@@ -29957,14 +29957,14 @@
       alert("No chord progression available to print.");
       return;
     }
-    const doc = new E({ orientation: "landscape", unit: "mm", format: "a4" });
+    const doc = new E({ orientation: "portrait", unit: "mm", format: "a4" });
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
     const margin = 8;
-    const gutter = 6;
-    const cardsPerRow = 3;
-    const cardW = (pageW - margin * 2 - gutter * (cardsPerRow - 1)) / cardsPerRow;
-    const cardH = 60;
+    const gutter = 8;
+    const cardsPerRow = 1;
+    const cardW = pageW - margin * 2;
+    const cardH = 48;
     let headerHeight = 0;
     if (progressionText && progressionText.trim().length > 0) {
       const titleFontSize = 16;
@@ -30070,15 +30070,11 @@
     }
     chordDetails.forEach((cd, idx) => {
       drawCard(cd, x2, y3);
-      x2 += cardW + gutter;
-      if ((idx + 1) % cardsPerRow === 0) {
+      y3 += cardH + gutter;
+      if (y3 + cardH + margin > pageH) {
+        doc.addPage();
         x2 = margin;
-        y3 += cardH + gutter;
-        if (y3 + cardH + margin > pageH) {
-          doc.addPage();
-          x2 = margin;
-          y3 = margin + headerHeight;
-        }
+        y3 = margin + headerHeight;
       }
     });
     doc.save(filename);
@@ -30180,7 +30176,28 @@
     let lastGeneratedResult = null;
     let lastGeneratedNotes = [];
     let lastGeneratedMidiBlob = null;
-    wirePrintButton(() => lastGeneratedResult, {
+    const getResultForPrint = () => {
+      try {
+        const formData = new FormData(form);
+        const rawProgression = formData.get("progression");
+        const validatedProgression = validateChordProgression(rawProgression);
+        const options = {
+          progressionString: validatedProgression,
+          outputFileName: formData.get("outputFileName") || void 0,
+          outputType: formData.get("outputType"),
+          inversionType: formData.get("inversionType"),
+          baseOctave: parseInt(formData.get("baseOctave"), 10),
+          chordDurationStr: formData.get("chordDuration"),
+          tempo: parseInt(formData.get("tempo"), 10),
+          velocity: parseInt(formData.get("velocity"), 10)
+        };
+        return midiGenerator.generate(options);
+      } catch (err2) {
+        console.warn("Print: failed to regenerate with current form values, falling back to last result.", err2);
+        return lastGeneratedResult;
+      }
+    };
+    wirePrintButton(getResultForPrint, {
       buttonId: "printProgressionButton",
       baseOctaveSelectorId: "baseOctave",
       filename: "progression.pdf",
