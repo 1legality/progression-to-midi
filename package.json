@@ -23,6 +23,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "jspdf": "^3.0.1",
     "midi-writer-js": "^3.1.1"
   }
 }
