@@ -30028,8 +30028,9 @@
           doc.setDrawColor(160);
           doc.rect(x2, yTop, drawWhiteKeyW, drawWhiteKeyH, "S");
           const label = `${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
-          doc.setTextColor(60);
-          doc.text(label, x2 + drawWhiteKeyW / 2, yTop + drawWhiteKeyH + 10, { align: "center" });
+          doc.setFontSize(7);
+          doc.setTextColor(80);
+          doc.text(label, x2 + drawWhiteKeyW / 2, yTop + drawWhiteKeyH - 4, { align: "center" });
         }
       }
       for (let s3 = 0; s3 < keysOctaves * 12; s3++) {
@@ -30051,28 +30052,6 @@
           }
           doc.setDrawColor(0);
           doc.rect(x2, yTop, drawBlackKeyW, drawBlackKeyH, "S");
-        }
-      }
-      doc.setFontSize(8);
-      for (const note of highlightNotes) {
-        if (note < baseMidi || note >= baseMidi + 12 * keysOctaves) continue;
-        const offset = note - baseMidi;
-        if (!isBlackInOctave(offset)) {
-          const wIdx = midiToWhiteIndex[note];
-          const x2 = kbX + wIdx * drawWhiteKeyW;
-          doc.setTextColor(10, 55, 120);
-          doc.setFillColor(37, 99, 235);
-          doc.rect(x2 + 2, kbY + drawWhiteKeyH - 14, drawWhiteKeyW - 4, 12, "F");
-          doc.setTextColor(255, 255, 255);
-          doc.text(String(note), x2 + 4, kbY + drawWhiteKeyH - 4);
-        } else {
-          let leftSemitone = offset - 1;
-          while (leftSemitone >= 0 && isBlackInOctave(leftSemitone)) leftSemitone--;
-          const leftMidi = baseMidi + leftSemitone;
-          const leftWhiteIdx = midiToWhiteIndex[leftMidi] ?? 0;
-          const x2 = kbX + (leftWhiteIdx + 1) * drawWhiteKeyW - drawBlackKeyW / 2;
-          doc.setTextColor(255, 255, 255);
-          doc.text(String(note), x2 + 2, kbY + 10);
         }
       }
       y3 += rowHeight + gapBetweenRows;

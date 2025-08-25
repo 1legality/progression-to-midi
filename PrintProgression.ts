@@ -168,12 +168,14 @@ export async function exportProgressionToPdf(options: MidiGenerationOptions): Pr
                 doc.setDrawColor(160);
                 doc.rect(x, yTop, drawWhiteKeyW, drawWhiteKeyH, 'S');
 
-                // note label centered under the key (short form like C3)
+                // note label inside the key near the bottom (short form like C3)
                 const label = `${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
-                doc.setTextColor(60);
-                doc.text(label, x + drawWhiteKeyW / 2, yTop + drawWhiteKeyH + 10, { align: 'center' });
-            }
-        }
+                doc.setFontSize(7);
+                doc.setTextColor(80);
+                // place label a few points above the key bottom
+                doc.text(label, x + drawWhiteKeyW / 2, yTop + drawWhiteKeyH - 4, { align: 'center' });
+             }
+         }
 
         // Draw black keys over the white keys
         for (let s = 0; s < keysOctaves * 12; s++) {
@@ -199,32 +201,6 @@ export async function exportProgressionToPdf(options: MidiGenerationOptions): Pr
                 doc.rect(x, yTop, drawBlackKeyW, drawBlackKeyH, 'S');
             }
         }
-
-        // Annotate highlighted MIDI numbers (small white-on-blue for white keys, small label for black keys)
-        doc.setFontSize(8);
-        for (const note of highlightNotes) {
-            if (note < baseMidi || note >= baseMidi + 12 * keysOctaves) continue;
-            const offset = note - baseMidi;
-            if (!isBlackInOctave(offset)) {
-                const wIdx = midiToWhiteIndex[note];
-                const x = kbX + wIdx * drawWhiteKeyW;
-                doc.setTextColor(10, 55, 120);
-                doc.setFillColor(37, 99, 235);
-                doc.rect(x + 2, kbY + drawWhiteKeyH - 14, drawWhiteKeyW - 4, 12, 'F');
-                doc.setTextColor(255, 255, 255);
-                doc.text(String(note), x + 4, kbY + drawWhiteKeyH - 4);
-            } else {
-                // black key label above
-                let leftSemitone = offset - 1;
-                while (leftSemitone >= 0 && isBlackInOctave(leftSemitone)) leftSemitone--;
-                const leftMidi = baseMidi + leftSemitone;
-                const leftWhiteIdx = midiToWhiteIndex[leftMidi] ?? 0;
-                const x = kbX + (leftWhiteIdx + 1) * drawWhiteKeyW - drawBlackKeyW / 2;
-                doc.setTextColor(255, 255, 255);
-                doc.text(String(note), x + 2, kbY + 10);
-            }
-        }
-
         y += rowHeight + gapBetweenRows;
     } // end chords loop
 
