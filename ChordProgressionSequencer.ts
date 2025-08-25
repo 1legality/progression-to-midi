@@ -4,6 +4,7 @@ import { SynthChordPlayer, ActiveNote } from './SynthChordPlayer';
 import { ChordInfoModal } from './ChordInfoModal';
 import { normalizeNoteName, getMidiNote, getNoteNameFromMidi } from './Utils';
 import { ALL_POSSIBLE_NOTE_NAMES_FOR_VALIDATION, VALID_DURATION_CODES, generateValidChordPattern } from './ValidationUtils';
+import { exportProgressionToPdf } from './PrintProgression';
 
 // Keep NoteData interface accessible if needed by Main.ts directly
 interface NoteData {
@@ -281,6 +282,46 @@ export function setupChordProgressionSequencer() {
         event.preventDefault();
         handleGeneration(true); // Generate MIDI data only for download
     });
+
+    // Optional PDF export button (if you add <button id="downloadPdfButton">Export PDF</button> to index.html)
+    const downloadPdfButton = document.getElementById('downloadPdfButton') as HTMLButtonElement | null;
+    if (downloadPdfButton) {
+        downloadPdfButton.addEventListener('click', async (event) => {
+            event.preventDefault();
+            try {
+                // Build same options object as used for MIDI generation
+                const formData = new FormData(form);
+                const validatedProgression = validateChordProgression(formData.get('progression') as string);
+                const options = {
+                    progressionString: validatedProgression,
+                    outputFileName: formData.get('outputFileName') as string || undefined,
+                    outputType: formData.get('outputType') as any,
+                    inversionType: formData.get('inversionType') as any,
+                    baseOctave: parseInt(formData.get('baseOctave') as string, 10),
+                    chordDurationStr: formData.get('chordDuration') as string,
+                    tempo: parseInt(formData.get('tempo') as string, 10),
+                    velocity: parseInt(formData.get('velocity') as string, 10)
+                } as import('./MidiGenerator').MidiGenerationOptions;
+
+                const pdfBlob = await exportProgressionToPdf(options);
+                // Trigger download
+                const url = URL.createObjectURL(pdfBlob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = (options.outputFileName ? (options.outputFileName.replace(/\.mid$/, '') + '.pdf') : 'progression.pdf');
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                statusDiv.textContent = `PDF export initiated.`;
+                statusDiv.classList.replace('text-muted', 'text-success');
+            } catch (err: any) {
+                console.error('PDF export failed', err);
+                statusDiv.textContent = `Error exporting PDF: ${err.message || String(err)}`;
+                statusDiv.classList.replace('text-muted', 'text-danger');
+            }
+        });
+    }
 
     // Add event listeners to form inputs to trigger preview generation on change
     const formInputs = form.querySelectorAll('input, select, textarea');

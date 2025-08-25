@@ -1,0 +1,235 @@
+import { jsPDF } from 'jspdf';
+import { MidiGenerator, MidiGenerationOptions } from './MidiGenerator';
+
+/**
+ * Export a chord progression to PDF.
+ * - Uses MidiGenerator.generate(...) to obtain chord details (voicings, bass note, etc).
+ * - Renders a header with the progression string and one 4-octave keyboard row per chord.
+ * - Respects outputType and inversionType by selecting which notes are highlighted.
+ *
+ * Returns a Blob for the generated PDF (caller may trigger a download).
+ */
+export async function exportProgressionToPdf(options: MidiGenerationOptions): Promise<Blob> {
+    const midiGenerator = new MidiGenerator();
+    const generationResult = midiGenerator.generate(options);
+    const chordDetails: any[] = (generationResult as any).chordDetails || [];
+    const progressionTitle = (options.progressionString || '').trim() || 'Progression';
+
+    // Create jsPDF (portrait, points)
+    const doc = new jsPDF({ unit: 'pt', format: 'letter' });
+    const margin = 36;
+    let y = margin;
+
+    // Header (centered)
+    doc.setFontSize(20);
+    const pageWidth = doc.internal.pageSize.getWidth();
+    doc.setTextColor(0);
+    doc.text(` ${progressionTitle}`, pageWidth / 2, y + 6, { align: 'center' });
+    y += 36;
+
+    // Per-chord layout metrics
+    let rowHeight = 110; // base row height
+    const whiteKeyWidth = 12; // nominal
+    const whiteKeyHeight = 56; // nominal
+    const blackKeyWidth = Math.round(whiteKeyWidth * 0.6);
+    const blackKeyHeight = Math.round(whiteKeyHeight * 0.62);
+    const keysOctaves = 4; // use 4 octaves
+    const whiteKeysPerOctave = 7;
+    const totalWhiteKeys = whiteKeysPerOctave * keysOctaves;
+    const keyboardWidth = totalWhiteKeys * whiteKeyWidth;
+    const labelWidth = 40;
+    const usableWidth = pageWidth - margin * 2;
+
+    // Increase scale up to ~35% and make keys taller by 25%
+    const scaleCap = 1.35;
+    // Use most of the usable width for the keyboard (ignore small label area) so keys scale up to fill more of the page
+    const scale = Math.min(scaleCap, Math.max(0.6, (usableWidth - 20) / keyboardWidth));
+    const heightMultiplier = 1.25;
+
+    const drawWhiteKeyW = whiteKeyWidth * scale;
+    const drawWhiteKeyH = whiteKeyHeight * scale * heightMultiplier;
+    const drawBlackKeyW = blackKeyWidth * scale;
+    const drawBlackKeyH = blackKeyHeight * scale * heightMultiplier;
+
+    // increase row height to accommodate taller keys
+    rowHeight = Math.round((drawWhiteKeyH + 36) );
+    const gapBetweenRows = 28;
+
+    // Note name helper
+    const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const midiToNoteLabel = (m: number) => `${NOTE_NAMES[m % 12]}${Math.floor(m / 12) - 1}`;
+
+    // Helper: semitone positions considered black within an octave
+    const isBlackInOctave = (semitone: number) => {
+        const s = semitone % 12;
+        return [1, 3, 6, 8, 10].includes(s);
+    };
+
+    // Iterate chords
+    for (let i = 0; i < chordDetails.length; i++) {
+        const chord = chordDetails[i];
+
+        // Add page if needed
+        if (y + rowHeight > doc.internal.pageSize.getHeight() - margin) {
+            doc.addPage();
+            // redraw header on new page
+            y = margin;
+            doc.setFontSize(20);
+            doc.setTextColor(0);
+            doc.text(` ${progressionTitle}`, pageWidth / 2, y + 6, { align: 'center' });
+            y += 36;
+        }
+
+        // Determine keyboard base MIDI so the notes fit within 4 octaves
+        const outputType = options.outputType;
+        let highlightNotes: number[] = [];
+
+        if (!chord || !chord.isValid) {
+            highlightNotes = [];
+        } else {
+            switch (outputType) {
+                case 'bassOnly':
+                    if (chord.calculatedBassNote !== null) highlightNotes = [chord.calculatedBassNote];
+                    break;
+                case 'bassAndFifth':
+                    if (chord.calculatedBassNote !== null) highlightNotes = [chord.calculatedBassNote, chord.calculatedBassNote + 7];
+                    break;
+                case 'chordsOnly':
+                    highlightNotes = Array.isArray(chord.adjustedVoicing) ? [...chord.adjustedVoicing] : [];
+                    break;
+                case 'chordsAndBass':
+                    highlightNotes = Array.isArray(chord.adjustedVoicing) ? [...chord.adjustedVoicing] : [];
+                    if (chord.calculatedBassNote !== null && !highlightNotes.includes(chord.calculatedBassNote)) {
+                        highlightNotes.push(chord.calculatedBassNote);
+                    }
+                    break;
+                case 'notesOnly':
+                default:
+                    highlightNotes = Array.isArray(chord.adjustedVoicing) ? [...chord.adjustedVoicing] : [];
+                    break;
+            }
+        }
+
+        const allNotes = highlightNotes.filter(n => typeof n === 'number' && !isNaN(n));
+        let minNote = allNotes.length ? Math.min(...allNotes) : 60;
+        let maxNote = allNotes.length ? Math.max(...allNotes) : 60;
+
+        // Choose base midi so min and max fit into keysOctaves * 12 semitones
+        // Prefer to start at C1 (MIDI 24) when possible so the first octave is used; only shift up if necessary
+        const C1 = 24;
+        let baseMidi = C1;
+        if (baseMidi + 12 * keysOctaves - 1 < maxNote) {
+            // shift up so maxNote fits within the window
+            baseMidi = Math.max(0, Math.floor((maxNote - (12 * keysOctaves - 1)) / 12) * 12);
+        }
+        if (baseMidi < 0) baseMidi = 0;
+        if (baseMidi + 12 * keysOctaves - 1 > 127) baseMidi = 127 - (12 * keysOctaves - 1);
+
+        // Draw keyboard centered horizontally in usable area
+        const kbY = y + 18;
+        const keyboardDrawWidth = totalWhiteKeys * drawWhiteKeyW;
+        const kbX = margin + Math.max(0, (usableWidth - keyboardDrawWidth) / 2);
+
+        // Map semitone index -> white index for horizontal pos
+        let whiteIndex = 0;
+        const midiToWhiteIndex: Record<number, number> = {};
+        for (let s = 0; s < keysOctaves * 12; s++) {
+            const midi = baseMidi + s;
+            if (!isBlackInOctave(s)) {
+                midiToWhiteIndex[midi] = whiteIndex++;
+            }
+        }
+
+        // Chord label centered above the keyboard
+        const chordLabel = chord && chord.symbol ? chord.symbol : '(rest)';
+        doc.setFontSize(12);
+        doc.setTextColor(0);
+        doc.text(chordLabel, kbX + keyboardDrawWidth / 2, y + 8, { align: 'center' });
+
+        // Draw white keys (with small note labels underneath)
+        doc.setDrawColor(50);
+        doc.setLineWidth(0.6);
+        doc.setFontSize(8);
+        for (let s = 0; s < keysOctaves * 12; s++) {
+            const midi = baseMidi + s;
+            if (!isBlackInOctave(s)) {
+                const wIdx = midiToWhiteIndex[midi];
+                const x = kbX + wIdx * drawWhiteKeyW;
+                const yTop = kbY;
+                const isHighlighted = highlightNotes.includes(midi);
+                if (isHighlighted) {
+                    doc.setFillColor(220, 235, 255);
+                    doc.rect(x, yTop, drawWhiteKeyW, drawWhiteKeyH, 'F');
+                } else {
+                    doc.setFillColor(255, 255, 255);
+                    doc.rect(x, yTop, drawWhiteKeyW, drawWhiteKeyH, 'F');
+                }
+                // key border
+                doc.setDrawColor(160);
+                doc.rect(x, yTop, drawWhiteKeyW, drawWhiteKeyH, 'S');
+
+                // note label centered under the key (short form like C3)
+                const label = `${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
+                doc.setTextColor(60);
+                doc.text(label, x + drawWhiteKeyW / 2, yTop + drawWhiteKeyH + 10, { align: 'center' });
+            }
+        }
+
+        // Draw black keys over the white keys
+        for (let s = 0; s < keysOctaves * 12; s++) {
+            if (isBlackInOctave(s)) {
+                const midi = baseMidi + s;
+                // Find the white key to the left: previous semitone will be white
+                let leftSemitone = s - 1;
+                while (leftSemitone >= 0 && isBlackInOctave(leftSemitone)) leftSemitone--;
+                const leftMidi = baseMidi + leftSemitone;
+                const leftWhiteIdx = midiToWhiteIndex[leftMidi] ?? 0;
+                const x = kbX + (leftWhiteIdx + 1) * drawWhiteKeyW - drawBlackKeyW / 2;
+                const yTop = kbY;
+                const isHighlighted = highlightNotes.includes(midi);
+                if (isHighlighted) {
+                    doc.setFillColor(160, 210, 255);
+                    doc.rect(x, yTop, drawBlackKeyW, drawBlackKeyH, 'F');
+                } else {
+                    doc.setFillColor(0, 0, 0);
+                    doc.rect(x, yTop, drawBlackKeyW, drawBlackKeyH, 'F');
+                }
+                // subtle border
+                doc.setDrawColor(0);
+                doc.rect(x, yTop, drawBlackKeyW, drawBlackKeyH, 'S');
+            }
+        }
+
+        // Annotate highlighted MIDI numbers (small white-on-blue for white keys, small label for black keys)
+        doc.setFontSize(8);
+        for (const note of highlightNotes) {
+            if (note < baseMidi || note >= baseMidi + 12 * keysOctaves) continue;
+            const offset = note - baseMidi;
+            if (!isBlackInOctave(offset)) {
+                const wIdx = midiToWhiteIndex[note];
+                const x = kbX + wIdx * drawWhiteKeyW;
+                doc.setTextColor(10, 55, 120);
+                doc.setFillColor(37, 99, 235);
+                doc.rect(x + 2, kbY + drawWhiteKeyH - 14, drawWhiteKeyW - 4, 12, 'F');
+                doc.setTextColor(255, 255, 255);
+                doc.text(String(note), x + 4, kbY + drawWhiteKeyH - 4);
+            } else {
+                // black key label above
+                let leftSemitone = offset - 1;
+                while (leftSemitone >= 0 && isBlackInOctave(leftSemitone)) leftSemitone--;
+                const leftMidi = baseMidi + leftSemitone;
+                const leftWhiteIdx = midiToWhiteIndex[leftMidi] ?? 0;
+                const x = kbX + (leftWhiteIdx + 1) * drawWhiteKeyW - drawBlackKeyW / 2;
+                doc.setTextColor(255, 255, 255);
+                doc.text(String(note), x + 2, kbY + 10);
+            }
+        }
+
+        y += rowHeight + gapBetweenRows;
+    } // end chords loop
+
+    // Finalize PDF -> Blob
+    const arrayBuffer = doc.output('arraybuffer');
+    const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+    return blob;
+}
