@@ -201,7 +201,79 @@ export async function exportProgressionToPdf(options: MidiGenerationOptions): Pr
                 doc.rect(x, yTop, drawBlackKeyW, drawBlackKeyH, 'S');
             }
         }
-        y += rowHeight + gapBetweenRows;
+
+        // --- Add pad-style "square" keyboard (four octaves) as an alternate visual ---
+        // Keep the original keyboard above and draw the pads in 2 rows (Torso T1 style).
+        const squareSize = Math.min(drawWhiteKeyW, drawWhiteKeyH);
+        // increase spacing so octave boundaries are visible
+        const octaveGap = Math.round(squareSize * 0.8);
+        const totalSemitones = keysOctaves * 12;
+
+        // Two rows: split octaves evenly across rows (for 4 octaves -> 2 octaves per row)
+        const rowOctaves = Math.ceil(keysOctaves / 2); // octaves per row
+        const rows = Math.ceil(keysOctaves / rowOctaves); // number of rows (should be 2)
+        const rowWidth = rowOctaves * 12 * squareSize + Math.max(0, (rowOctaves - 1) * octaveGap);
+        const padX = margin + Math.max(0, (usableWidth - rowWidth) / 2);
+
+        // place pads below the piano keyboard, give a bit more vertical space
+        const padTopY = kbY + drawWhiteKeyH + 14;
+        const padRowGap = Math.round(squareSize * 0.9); // vertical gap between pad rows
+        const padHeight = squareSize;
+
+        doc.setLineWidth(0.8);
+        for (let s = 0; s < totalSemitones; s++) {
+            const midi = baseMidi + s;
+            const octaveIndex = Math.floor(s / 12);
+            const semitoneInOctave = s % 12;
+
+            // rowIndex: which of the stacked rows (0..rows-1)
+            const rowIndex = Math.floor(octaveIndex / rowOctaves);
+            // column within that row (0..rowOctaves-1)
+            const colInRow = octaveIndex % rowOctaves;
+
+            const x = padX + colInRow * (12 * squareSize + octaveGap) + semitoneInOctave * squareSize;
+            const yTop = padTopY + rowIndex * (padHeight + padRowGap);
+
+            const isBlack = isBlackInOctave(semitoneInOctave);
+            const isHighlighted = highlightNotes.includes(midi);
+
+            if (isHighlighted) {
+                // highlighted note color (dot also drawn below)
+                doc.setFillColor(250, 200, 80);
+            } else if (isBlack) {
+                // black semitone pads shown blue
+                doc.setFillColor(100, 150, 255);
+            } else {
+                // white semitone pads shown light grey
+                doc.setFillColor(245, 245, 245);
+            }
+
+            doc.rect(x, yTop, squareSize, padHeight, 'F');
+            doc.setDrawColor(120);
+            doc.rect(x, yTop, squareSize, padHeight, 'S');
+
+            // optional small marker for highlighted notes (centered dot)
+            if (isHighlighted) {
+                doc.setFillColor(60, 60, 60);
+                const cx = x + squareSize / 2;
+                const cy = yTop + padHeight / 2;
+                doc.circle(cx, cy, Math.max(1.5, squareSize * 0.08), 'F');
+            }
+
+            // small label under each pad in the same row as the pad
+            doc.setFontSize(7);
+            doc.setTextColor(60);
+            const label = `${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
+            doc.text(label, x + squareSize / 2, yTop + padHeight + 9, { align: 'center' });
+        }
+
+        // move ASCII tab down to sit under the pad rows (give a bit of spacing)
+        const tabY = padTopY + rows * padHeight + (rows - 1) * padRowGap + 12;
+        doc.setFontSize(12);
+        doc.setTextColor(0);
+
+        // Advance y to remain below the pad rows (keep spacing similar to previous layout).
+        y = padTopY + rows * padHeight + (rows - 1) * padRowGap + 18;
     } // end chords loop
 
     // Finalize PDF -> Blob
