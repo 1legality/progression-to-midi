@@ -35295,44 +35295,6 @@
       return [1, 3, 6, 8, 10].includes(s3);
     };
     for (let i3 = 0; i3 < chordDetails.length; i3++) {
-      let generateAsciiTab2 = function(ch) {
-        const openStrings = [64, 59, 55, 50, 45, 40];
-        const MAX_FRET = 20;
-        const lines = [];
-        if (!ch || !ch.isValid || !Array.isArray(ch.adjustedVoicing) || ch.adjustedVoicing.length === 0) {
-          for (let i4 = 0; i4 < 6; i4++) lines.push("-----");
-          return lines;
-        }
-        const chordNotes = ch.adjustedVoicing.filter((n2) => typeof n2 === "number");
-        for (const open2 of openStrings) {
-          let bestFret = null;
-          let bestDistance = 999;
-          let bestMidi = null;
-          for (const note of chordNotes) {
-            for (let octaveShift = -2; octaveShift <= 2; octaveShift++) {
-              const candidate = note + octaveShift * 12;
-              const fret = candidate - open2;
-              if (fret >= 0 && fret <= MAX_FRET) {
-                const dist = Math.abs(fret);
-                if (dist < bestDistance) {
-                  bestDistance = dist;
-                  bestFret = fret;
-                  bestMidi = candidate;
-                }
-              }
-            }
-          }
-          if (bestFret === null) {
-            lines.push("-----");
-          } else {
-            const midiForName = bestMidi ?? open2 + bestFret;
-            const noteName = NOTE_NAMES[midiForName % 12].toLowerCase();
-            lines.push(`--${bestFret}--${noteName}`);
-          }
-        }
-        return lines;
-      };
-      var generateAsciiTab = generateAsciiTab2;
       const chord = chordDetails[i3];
       if (y3 + rowHeight > doc.internal.pageSize.getHeight() - margin) {
         doc.addPage();
@@ -35485,17 +35447,7 @@
       const tabY = padTopY + rows * padHeight + (rows - 1) * padRowGap + 12;
       doc.setFontSize(12);
       doc.setTextColor(0);
-      const TAB_LINE_HEIGHT = 12;
-      const asciiTabStartY = tabY + 14;
-      const tabLines = generateAsciiTab2(chord);
-      doc.setFont("courier");
-      doc.setFontSize(10);
-      for (let i4 = 0; i4 < tabLines.length; i4++) {
-        const line = tabLines[i4];
-        doc.text(line, kbX, asciiTabStartY + i4 * TAB_LINE_HEIGHT);
-      }
-      doc.setFont("helvetica");
-      y3 = asciiTabStartY + tabLines.length * TAB_LINE_HEIGHT + 18;
+      y3 = padTopY + rows * padHeight + (rows - 1) * padRowGap + 18;
     }
     const arrayBuffer = doc.output("arraybuffer");
     const blob = new Blob([arrayBuffer], { type: "application/pdf" });

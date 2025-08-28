@@ -272,71 +272,8 @@ export async function exportProgressionToPdf(options: MidiGenerationOptions): Pr
         doc.setFontSize(12);
         doc.setTextColor(0);
 
-        const TAB_LINE_HEIGHT = 12;
-        const asciiTabStartY = tabY + 14;
-
-        function generateAsciiTab(ch: any): string[] {
-            const openStrings = [64, 59, 55, 50, 45, 40]; // high -> low
-            const MAX_FRET = 20;
-            const lines: string[] = [];
-
-            if (!ch || !ch.isValid || !Array.isArray(ch.adjustedVoicing) || ch.adjustedVoicing.length === 0) {
-                // empty 6-line placeholder (leave lines empty, no 0 or x)
-                for (let i = 0; i < 6; i++) lines.push('-----');
-                return lines;
-            }
-
-            const chordNotes: number[] = ch.adjustedVoicing.filter((n: any) => typeof n === 'number');
-
-            for (const open of openStrings) {
-                let bestFret: number | null = null;
-                let bestDistance = 999;
-                let bestMidi: number | null = null;
-
-                for (const note of chordNotes) {
-                    // consider multiple octaves around the note to find a playable fret on this string
-                    for (let octaveShift = -2; octaveShift <= 2; octaveShift++) {
-                        const candidate = note + octaveShift * 12;
-                        const fret = candidate - open;
-                        if (fret >= 0 && fret <= MAX_FRET) {
-                            const dist = Math.abs(fret); // prefer lower frets
-                            if (dist < bestDistance) {
-                                bestDistance = dist;
-                                bestFret = fret;
-                                bestMidi = candidate;
-                            }
-                        }
-                    }
-                }
-
-                if (bestFret === null) {
-                    // not used -> leave empty-looking tab line (no 0, no x)
-                    lines.push('-----');
-                } else {
-                    // append note letter (lowercase) to the right, e.g. "--3--b"
-                    const midiForName = bestMidi ?? (open + bestFret);
-                    const noteName = NOTE_NAMES[midiForName % 12].toLowerCase();
-                    lines.push(`--${bestFret}--${noteName}`);
-                }
-            }
-
-            return lines;
-        }
-
-        const tabLines = generateAsciiTab(chord);
-
-        // Print the ASCII tab lines (top-to-bottom = high E -> low E)
-        doc.setFont('courier');
-        doc.setFontSize(10);
-        for (let i = 0; i < tabLines.length; i++) {
-            const line = tabLines[i];
-            doc.text(line, kbX, asciiTabStartY + i * TAB_LINE_HEIGHT);
-        }
-        // restore default font for subsequent content
-        doc.setFont('helvetica');
-
-        // Update y position for next chord (leave some space after tab)
-        y = asciiTabStartY + tabLines.length * TAB_LINE_HEIGHT + 18;
+        // Advance y to remain below the pad rows (keep spacing similar to previous layout).
+        y = padTopY + rows * padHeight + (rows - 1) * padRowGap + 18;
     } // end chords loop
 
     // Finalize PDF -> Blob
