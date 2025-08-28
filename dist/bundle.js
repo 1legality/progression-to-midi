@@ -35440,10 +35440,51 @@
           doc.rect(x2, yTop, drawBlackKeyW, drawBlackKeyH, "S");
         }
       }
-      const tabY = y3 + rowHeight + 8;
+      const squareSize = Math.min(drawWhiteKeyW, drawWhiteKeyH);
+      const octaveGap = Math.round(squareSize * 0.8);
+      const totalSemitones = keysOctaves * 12;
+      const rowOctaves = Math.ceil(keysOctaves / 2);
+      const rows = Math.ceil(keysOctaves / rowOctaves);
+      const rowWidth = rowOctaves * 12 * squareSize + Math.max(0, (rowOctaves - 1) * octaveGap);
+      const padX = margin + Math.max(0, (usableWidth - rowWidth) / 2);
+      const padTopY = kbY + drawWhiteKeyH + 14;
+      const padRowGap = Math.round(squareSize * 0.9);
+      const padHeight = squareSize;
+      doc.setLineWidth(0.8);
+      for (let s3 = 0; s3 < totalSemitones; s3++) {
+        const midi = baseMidi + s3;
+        const octaveIndex = Math.floor(s3 / 12);
+        const semitoneInOctave = s3 % 12;
+        const rowIndex = Math.floor(octaveIndex / rowOctaves);
+        const colInRow = octaveIndex % rowOctaves;
+        const x2 = padX + colInRow * (12 * squareSize + octaveGap) + semitoneInOctave * squareSize;
+        const yTop = padTopY + rowIndex * (padHeight + padRowGap);
+        const isBlack = isBlackInOctave(semitoneInOctave);
+        const isHighlighted = highlightNotes.includes(midi);
+        if (isHighlighted) {
+          doc.setFillColor(250, 200, 80);
+        } else if (isBlack) {
+          doc.setFillColor(100, 150, 255);
+        } else {
+          doc.setFillColor(245, 245, 245);
+        }
+        doc.rect(x2, yTop, squareSize, padHeight, "F");
+        doc.setDrawColor(120);
+        doc.rect(x2, yTop, squareSize, padHeight, "S");
+        if (isHighlighted) {
+          doc.setFillColor(60, 60, 60);
+          const cx = x2 + squareSize / 2;
+          const cy = yTop + padHeight / 2;
+          doc.circle(cx, cy, Math.max(1.5, squareSize * 0.08), "F");
+        }
+        doc.setFontSize(7);
+        doc.setTextColor(60);
+        const label = `${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
+        doc.text(label, x2 + squareSize / 2, yTop + padHeight + 9, { align: "center" });
+      }
+      const tabY = padTopY + rows * padHeight + (rows - 1) * padRowGap + 12;
       doc.setFontSize(12);
       doc.setTextColor(0);
-      doc.text("Guitar", kbX, tabY);
       const TAB_LINE_HEIGHT = 12;
       const asciiTabStartY = tabY + 14;
       const tabLines = generateAsciiTab2(chord);
