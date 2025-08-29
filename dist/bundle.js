@@ -30066,9 +30066,9 @@
       const padHeight = squareSize;
       doc.setLineWidth(0.8);
       const whiteSemitones = [0, 2, 4, 5, 7, 9, 11];
-      const hasBlackAfter = [1, 2, 4, 5, 6];
       const blackPadWidth = squareSize;
       const blackOffset = 0;
+      const topPadMapping = [null, 1, 3, null, 6, 8, 10];
       for (let octaveIndex = 0; octaveIndex < keysOctaves; octaveIndex++) {
         const rowIndex = Math.floor(octaveIndex / rowOctaves);
         const colInRow = octaveIndex % rowOctaves;
@@ -30080,8 +30080,14 @@
           const semitone = whiteSemitones[w2];
           const midiWhite = baseMidi + octaveIndex * 12 + semitone;
           const x2 = baseXForOctave + w2 * squareSize;
-          if (hasBlackAfter.includes(w2)) {
-            const midiBlack = midiWhite + 1;
+          const mapped = topPadMapping[w2];
+          if (mapped === null) {
+            doc.setFillColor(0, 0, 0);
+            doc.rect(x2 + blackOffset, blackYTop, blackPadWidth, padHeight, "F");
+            doc.setDrawColor(0);
+            doc.rect(x2 + blackOffset, blackYTop, blackPadWidth, padHeight, "S");
+          } else {
+            const midiBlack = baseMidi + octaveIndex * 12 + mapped;
             const blackHighlighted = highlightNotes.includes(midiBlack);
             if (blackHighlighted) {
               doc.setFillColor(160, 210, 255);
@@ -30090,17 +30096,6 @@
             }
             doc.rect(x2 + blackOffset, blackYTop, blackPadWidth, padHeight, "F");
             doc.setDrawColor(120);
-            doc.rect(x2 + blackOffset, blackYTop, blackPadWidth, padHeight, "S");
-            if (blackHighlighted) {
-              doc.setFillColor(60, 60, 60);
-              const cx = x2 + blackOffset + blackPadWidth / 2;
-              const cy = blackYTop + padHeight / 2;
-              doc.circle(cx, cy, Math.max(1.5, squareSize * 0.08), "F");
-            }
-          } else {
-            doc.setFillColor(0, 0, 0);
-            doc.rect(x2 + blackOffset, blackYTop, blackPadWidth, padHeight, "F");
-            doc.setDrawColor(0);
             doc.rect(x2 + blackOffset, blackYTop, blackPadWidth, padHeight, "S");
           }
           const whiteHighlighted = highlightNotes.includes(midiWhite);

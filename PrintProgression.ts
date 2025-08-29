@@ -224,34 +224,48 @@ export async function exportProgressionToPdf(options: MidiGenerationOptions): Pr
         doc.setLineWidth(0.8);
         // Draw pads using 7 columns per octave (white key columns). Black keys appear on an upper row
         const whiteSemitones = [0, 2, 4, 5, 7, 9, 11];
-        // configure which white columns show a non-empty top cell.
-        // We want the "empty" top cells to be over C and F (indices 0 and 3), so hasBlackAfter
-        // should include the other indices (1,2,4,5,6).
-        const hasBlackAfter = [1, 2, 4, 5, 6];
+        // top-pad presence is determined per white-column by checking whether the
+        // next semitone is a black key; this avoids relying on a hardcoded index list
+        // (so F will correctly show a top pad where appropriate).
 
         // make top pads full-size squares (same width as the white pads)
         const blackPadWidth = squareSize;
         const blackOffset = 0;
 
+        // Elektron-style per-column mapping for the top (black) row.
+        // For each white column (C D E F G A B) specify which black semitone
+        // should be shown in the top pad. Use null to indicate an "empty" top cell
+        // which is rendered as a full black square.
+        // Layout:  C   D   E   F   G   A   B
+        // Desired Elektron layout: C# D# - F# G# A# over C D E F G A B. 
+        // maps to semitone numbers within the octave: [null, 1, 3, null, 6, 8, 10]
+        const topPadMapping: Array<number | null> = [null, 1, 3, null, 6, 8, 10];
+
         // each visual "row" consists of an upper top-pad row and a lower white-pad row
         for (let octaveIndex = 0; octaveIndex < keysOctaves; octaveIndex++) {
-            const rowIndex = Math.floor(octaveIndex / rowOctaves);
-            const colInRow = octaveIndex % rowOctaves;
+             const rowIndex = Math.floor(octaveIndex / rowOctaves);
+             const colInRow = octaveIndex % rowOctaves;
+ 
+             const baseXForOctave = padX + colInRow * (7 * squareSize + octaveGap);
+             const perRowTop = padTopY + rowIndex * (2 * padHeight + padRowGap);
+             const blackYTop = perRowTop; // upper small pads (black-key placeholders)
+             const whiteYTop = perRowTop + padHeight; // lower pads (white-key columns)
+ 
+             for (let w = 0; w < 7; w++) {
+                 const semitone = whiteSemitones[w];
+                 const midiWhite = baseMidi + octaveIndex * 12 + semitone;
+                 const x = baseXForOctave + w * squareSize;
 
-            const baseXForOctave = padX + colInRow * (7 * squareSize + octaveGap);
-            const perRowTop = padTopY + rowIndex * (2 * padHeight + padRowGap);
-            const blackYTop = perRowTop; // upper small pads (black-key placeholders)
-            const whiteYTop = perRowTop + padHeight; // lower pads (white-key columns)
-
-            for (let w = 0; w < 7; w++) {
-                const semitone = whiteSemitones[w];
-                const midiWhite = baseMidi + octaveIndex * 12 + semitone;
-                const x = baseXForOctave + w * squareSize;
-
-                // Draw black pad (upper row) if this white position has a black key after it
-                if (hasBlackAfter.includes(w)) {
-                    // non-empty top cell (represents a black-key-like pad)
-                    const midiBlack = midiWhite + 1;
+                // Use mapping to determine which black (if any) to show above this white column.
+                const mapped = topPadMapping[w];
+                if (mapped === null) {
+                    // render an "empty" top cell as a full black square
+                    doc.setFillColor(0, 0, 0);
+                    doc.rect(x + blackOffset, blackYTop, blackPadWidth, padHeight, 'F');
+                    doc.setDrawColor(0);
+                    doc.rect(x + blackOffset, blackYTop, blackPadWidth, padHeight, 'S');
+                } else {
+                    const midiBlack = baseMidi + octaveIndex * 12 + mapped;
                     const blackHighlighted = highlightNotes.includes(midiBlack);
                     if (blackHighlighted) {
                         doc.setFillColor(160, 210, 255); // blue highlight
@@ -260,19 +274,6 @@ export async function exportProgressionToPdf(options: MidiGenerationOptions): Pr
                     }
                     doc.rect(x + blackOffset, blackYTop, blackPadWidth, padHeight, 'F');
                     doc.setDrawColor(120);
-                    doc.rect(x + blackOffset, blackYTop, blackPadWidth, padHeight, 'S');
-
-                    if (blackHighlighted) {
-                        doc.setFillColor(60, 60, 60);
-                        const cx = x + blackOffset + blackPadWidth / 2;
-                        const cy = blackYTop + padHeight / 2;
-                        doc.circle(cx, cy, Math.max(1.5, squareSize * 0.08), 'F');
-                    }
-                } else {
-                    // empty top cell: draw a full black square
-                    doc.setFillColor(0, 0, 0);
-                    doc.rect(x + blackOffset, blackYTop, blackPadWidth, padHeight, 'F');
-                    doc.setDrawColor(0);
                     doc.rect(x + blackOffset, blackYTop, blackPadWidth, padHeight, 'S');
                 }
 
