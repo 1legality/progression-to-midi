@@ -212,7 +212,8 @@ export async function exportProgressionToPdf(options: MidiGenerationOptions): Pr
         // Two rows: split octaves evenly across rows (for 4 octaves -> 2 octaves per row)
         const rowOctaves = Math.ceil(keysOctaves / 2); // octaves per row
         const rows = Math.ceil(keysOctaves / rowOctaves); // number of rows (should be 2)
-        const rowWidth = rowOctaves * 12 * squareSize + Math.max(0, (rowOctaves - 1) * octaveGap);
+        // Use 7 columns per octave for pad layout (one column per white key) and place black-key row above white-key row
+        const rowWidth = rowOctaves * 7 * squareSize + Math.max(0, (rowOctaves - 1) * octaveGap);
         const padX = margin + Math.max(0, (usableWidth - rowWidth) / 2);
 
         // place pads below the piano keyboard, give a bit more vertical space
@@ -221,59 +222,87 @@ export async function exportProgressionToPdf(options: MidiGenerationOptions): Pr
         const padHeight = squareSize;
 
         doc.setLineWidth(0.8);
-        for (let s = 0; s < totalSemitones; s++) {
-            const midi = baseMidi + s;
-            const octaveIndex = Math.floor(s / 12);
-            const semitoneInOctave = s % 12;
+        // Draw pads using 7 columns per octave (white key columns). Black keys appear on an upper row
+        const whiteSemitones = [0, 2, 4, 5, 7, 9, 11];
+        // configure which white columns show a non-empty top cell.
+        // We want the "empty" top cells to be over C and F (indices 0 and 3), so hasBlackAfter
+        // should include the other indices (1,2,4,5,6).
+        const hasBlackAfter = [1, 2, 4, 5, 6];
 
-            // rowIndex: which of the stacked rows (0..rows-1)
+        // make top pads full-size squares (same width as the white pads)
+        const blackPadWidth = squareSize;
+        const blackOffset = 0;
+
+        // each visual "row" consists of an upper top-pad row and a lower white-pad row
+        for (let octaveIndex = 0; octaveIndex < keysOctaves; octaveIndex++) {
             const rowIndex = Math.floor(octaveIndex / rowOctaves);
-            // column within that row (0..rowOctaves-1)
             const colInRow = octaveIndex % rowOctaves;
 
-            const x = padX + colInRow * (12 * squareSize + octaveGap) + semitoneInOctave * squareSize;
-            const yTop = padTopY + rowIndex * (padHeight + padRowGap);
+            const baseXForOctave = padX + colInRow * (7 * squareSize + octaveGap);
+            const perRowTop = padTopY + rowIndex * (2 * padHeight + padRowGap);
+            const blackYTop = perRowTop; // upper small pads (black-key placeholders)
+            const whiteYTop = perRowTop + padHeight; // lower pads (white-key columns)
 
-            const isBlack = isBlackInOctave(semitoneInOctave);
-            const isHighlighted = highlightNotes.includes(midi);
+            for (let w = 0; w < 7; w++) {
+                const semitone = whiteSemitones[w];
+                const midiWhite = baseMidi + octaveIndex * 12 + semitone;
+                const x = baseXForOctave + w * squareSize;
 
-            if (isHighlighted) {
-                // highlighted note color (dot also drawn below)
-                doc.setFillColor(250, 200, 80);
-            } else if (isBlack) {
-                // black semitone pads shown blue
-                doc.setFillColor(100, 150, 255);
-            } else {
-                // white semitone pads shown light grey
-                doc.setFillColor(245, 245, 245);
+                // Draw black pad (upper row) if this white position has a black key after it
+                if (hasBlackAfter.includes(w)) {
+                    // non-empty top cell (represents a black-key-like pad)
+                    const midiBlack = midiWhite + 1;
+                    const blackHighlighted = highlightNotes.includes(midiBlack);
+                    if (blackHighlighted) {
+                        doc.setFillColor(160, 210, 255); // blue highlight
+                    } else {
+                        doc.setFillColor(245, 245, 245); // subtle grey for non-highlighted top pads
+                    }
+                    doc.rect(x + blackOffset, blackYTop, blackPadWidth, padHeight, 'F');
+                    doc.setDrawColor(120);
+                    doc.rect(x + blackOffset, blackYTop, blackPadWidth, padHeight, 'S');
+
+                    if (blackHighlighted) {
+                        doc.setFillColor(60, 60, 60);
+                        const cx = x + blackOffset + blackPadWidth / 2;
+                        const cy = blackYTop + padHeight / 2;
+                        doc.circle(cx, cy, Math.max(1.5, squareSize * 0.08), 'F');
+                    }
+                } else {
+                    // empty top cell: draw a full black square
+                    doc.setFillColor(0, 0, 0);
+                    doc.rect(x + blackOffset, blackYTop, blackPadWidth, padHeight, 'F');
+                    doc.setDrawColor(0);
+                    doc.rect(x + blackOffset, blackYTop, blackPadWidth, padHeight, 'S');
+                }
+
+                // White pad (bottom row)
+                const whiteHighlighted = highlightNotes.includes(midiWhite);
+                if (whiteHighlighted) {
+                    doc.setFillColor(160, 210, 255); // highlighted (use blue per request)
+                } else {
+                    doc.setFillColor(255, 255, 255); // white background
+                }
+                doc.rect(x, whiteYTop, squareSize, padHeight, 'F');
+                doc.setDrawColor(120);
+                doc.rect(x, whiteYTop, squareSize, padHeight, 'S');
+
+                // Label under the white pad
+                doc.setFontSize(7);
+                doc.setTextColor(60);
+                const label = `${NOTE_NAMES[midiWhite % 12]}${Math.floor(midiWhite / 12) - 1}`;
+                doc.text(label, x + squareSize / 2, whiteYTop + padHeight + 9, { align: 'center' });
             }
-
-            doc.rect(x, yTop, squareSize, padHeight, 'F');
-            doc.setDrawColor(120);
-            doc.rect(x, yTop, squareSize, padHeight, 'S');
-
-            // optional small marker for highlighted notes (centered dot)
-            if (isHighlighted) {
-                doc.setFillColor(60, 60, 60);
-                const cx = x + squareSize / 2;
-                const cy = yTop + padHeight / 2;
-                doc.circle(cx, cy, Math.max(1.5, squareSize * 0.08), 'F');
-            }
-
-            // small label under each pad in the same row as the pad
-            doc.setFontSize(7);
-            doc.setTextColor(60);
-            const label = `${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
-            doc.text(label, x + squareSize / 2, yTop + padHeight + 9, { align: 'center' });
         }
 
         // move ASCII tab down to sit under the pad rows (give a bit of spacing)
-        const tabY = padTopY + rows * padHeight + (rows - 1) * padRowGap + 12;
-        doc.setFontSize(12);
-        doc.setTextColor(0);
+        const totalPadAreaHeight = rows * (2 * padHeight) + (rows - 1) * padRowGap;
+        const tabY = padTopY + totalPadAreaHeight + 12;
+         doc.setFontSize(12);
+         doc.setTextColor(0);
 
-        // Advance y to remain below the pad rows (keep spacing similar to previous layout).
-        y = padTopY + rows * padHeight + (rows - 1) * padRowGap + 18;
+         // Advance y to remain below the pad rows (keep spacing similar to previous layout).
+         y = padTopY + totalPadAreaHeight + 18;
     } // end chords loop
 
     // Finalize PDF -> Blob
