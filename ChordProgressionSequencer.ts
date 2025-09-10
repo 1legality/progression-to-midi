@@ -87,10 +87,11 @@ export function setupChordProgressionSequencer() {
 
     function validateChordProgression(progression: string): string {
         const normalizedProgression = progression
-            .replace(/\|/g, ' ') // Replace pipes with spaces
-            .replace(/->/g, ' ') // Replace arrows with spaces
-            .replace(/\s*-\s*/g, ' ') // Treat hyphens as separators for chords
-            .replace(/\s+/g, ' ') // Normalize multiple spaces
+            .replace(/,/g, ' ') // Add this line to handle commas
+            .replace(/\|/g, ' ')
+            .replace(/->/g, ' ')
+            .replace(/\s*-\s*/g, ' ')
+            .replace(/\s+/g, ' ')
             .trim();
 
         if (!normalizedProgression) {
@@ -99,6 +100,8 @@ export function setupChordProgressionSequencer() {
 
         const chordEntries = normalizedProgression.split(/\s+/);
         const validChordSymbolPattern = generateValidChordPattern();
+        // Accept '1' (single note) as a valid chord quality
+        const validSingleNotePattern = /^[A-G][#b]?1$/i;
         const validatedEntries: string[] = [];
 
         for (const entry of chordEntries) {
@@ -118,8 +121,9 @@ export function setupChordProgressionSequencer() {
                 continue;
             }
 
-            if (!validChordSymbolPattern.test(chordSymbol)) {
-                throw new Error(`Invalid chord symbol: "${chordSymbol}" in entry "${entry}". Use formats like C, Cm, G7.`);
+            // Accept single note chords like C1 F#1, etc.
+            if (!validChordSymbolPattern.test(chordSymbol) && !validSingleNotePattern.test(chordSymbol)) {
+                throw new Error(`Invalid chord symbol: "${chordSymbol}" in entry "${entry}". Use formats like C, Cm, G7, or C1 for single note.`);
             }
 
             if (durationStr !== undefined) {

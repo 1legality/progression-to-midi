@@ -52,6 +52,9 @@ export const CHORD_FORMULAS: Record<string, number[]> = {
     'sus': [INTERVALS.P1, INTERVALS.P4, INTERVALS.P5], // Alias for sus4
     'sus2': [INTERVALS.P1, INTERVALS.M2, INTERVALS.P5],
 
+    // --- Single note (root only) ---
+    '1': [INTERVALS.P1], 
+
     // --- Power Chord ---
     '5': [INTERVALS.P1, INTERVALS.P5],
 

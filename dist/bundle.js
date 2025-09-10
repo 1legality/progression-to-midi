@@ -1126,6 +1126,8 @@
         "sus": [INTERVALS.P1, INTERVALS.P4, INTERVALS.P5],
         // Alias for sus4
         "sus2": [INTERVALS.P1, INTERVALS.M2, INTERVALS.P5],
+        // --- Single note (root only) ---
+        "1": [INTERVALS.P1],
         // --- Power Chord ---
         "5": [INTERVALS.P1, INTERVALS.P5],
         // --- "Add" Chords (Triads + added note, no 7th) ---
@@ -2355,12 +2357,14 @@
           modalContent += "<p>Specify an explicit bass note after a slash to force the bass (e.g., <code>C/G</code> plays C major with G in the bass). The generator will try typical bass octaves and avoid exact duplication of chord tones when possible.</p>";
           modalContent += "<p><strong>Examples:</strong> <code>C/G:1</code>, <code>Am/C:0.5</code>, <code>F/A:2</code></p>";
           modalContent += "<h5>Known Chord Qualities</h5>";
-          modalContent += "<p>The following chord qualities are recognized (case-insensitive). Chord symbols are generally <code>[RootNote][Quality]</code> (e.g., C, Cm, Cmaj7, Gsus, F#dim7). Root notes can be A-G, optionally followed by # (sharp) or b (flat).</p>";
+          modalContent += "<p>The following chord qualities are recognized (case-insensitive). Chord symbols are generally <code>[RootNote][Quality]</code> (e.g., C, Cm, Cmaj7, Gsus, F#dim7). Root notes can be A-G, optionally followed by # (sharp) or b (flat). <br><strong>New:</strong> Use <code>1</code> for single note (root only), e.g. <code>C1</code> or <code>F#1</code>.</p>";
           modalContent += '<table class="table table-bordered">';
           modalContent += "<thead><tr><th>Quality</th><th>Intervals</th></tr></thead>";
           modalContent += "<tbody>";
           chordEntries.forEach(([chord, formula]) => {
-            modalContent += `<tr><td><strong>${chord || "Major"}</strong></td><td>${formula.join(", ")}</td></tr>`;
+            let displayChord = chord || "Major";
+            if (chord === "1") displayChord += " (Single Note)";
+            modalContent += `<tr><td><strong>${displayChord}</strong></td><td>${formula.join(", ")}</td></tr>`;
           });
           modalContent += "</tbody>";
           modalContent += "</table>";
@@ -30188,12 +30192,13 @@
       }
     };
     function validateChordProgression(progression) {
-      const normalizedProgression = progression.replace(/\|/g, " ").replace(/->/g, " ").replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
+      const normalizedProgression = progression.replace(/,/g, " ").replace(/\|/g, " ").replace(/->/g, " ").replace(/\s*-\s*/g, " ").replace(/\s+/g, " ").trim();
       if (!normalizedProgression) {
         return "";
       }
       const chordEntries = normalizedProgression.split(/\s+/);
       const validChordSymbolPattern = generateValidChordPattern();
+      const validSingleNotePattern = /^[A-G][#b]?1$/i;
       const validatedEntries = [];
       for (const entry of chordEntries) {
         if (!entry) continue;
@@ -30207,8 +30212,8 @@
           validatedEntries.push(entry);
           continue;
         }
-        if (!validChordSymbolPattern.test(chordSymbol)) {
-          throw new Error(`Invalid chord symbol: "${chordSymbol}" in entry "${entry}". Use formats like C, Cm, G7.`);
+        if (!validChordSymbolPattern.test(chordSymbol) && !validSingleNotePattern.test(chordSymbol)) {
+          throw new Error(`Invalid chord symbol: "${chordSymbol}" in entry "${entry}". Use formats like C, Cm, G7, or C1 for single note.`);
         }
         if (durationStr !== void 0) {
           const numericDuration = parseFloat(durationStr);

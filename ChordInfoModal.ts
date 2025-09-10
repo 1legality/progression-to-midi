@@ -53,12 +53,14 @@ export class ChordInfoModal {
         modalContent += '<p><strong>Examples:</strong> <code>C/G:1</code>, <code>Am/C:0.5</code>, <code>F/A:2</code></p>';
         // --- Known Chord Formulas Section ---
         modalContent += '<h5>Known Chord Qualities</h5>';
-        modalContent += '<p>The following chord qualities are recognized (case-insensitive). Chord symbols are generally <code>[RootNote][Quality]</code> (e.g., C, Cm, Cmaj7, Gsus, F#dim7). Root notes can be A-G, optionally followed by # (sharp) or b (flat).</p>';
+        modalContent += '<p>The following chord qualities are recognized (case-insensitive). Chord symbols are generally <code>[RootNote][Quality]</code> (e.g., C, Cm, Cmaj7, Gsus, F#dim7). Root notes can be A-G, optionally followed by # (sharp) or b (flat). <br><strong>New:</strong> Use <code>1</code> for single note (root only), e.g. <code>C1</code> or <code>F#1</code>.</p>';
         modalContent += '<table class="table table-bordered">';
         modalContent += '<thead><tr><th>Quality</th><th>Intervals</th></tr></thead>';
         modalContent += '<tbody>';
         chordEntries.forEach(([chord, formula]) => {
-            modalContent += `<tr><td><strong>${chord || 'Major'}</strong></td><td>${formula.join(', ')}</td></tr>`;
+            let displayChord = chord || 'Major';
+            if (chord === '1') displayChord += ' (Single Note)';
+            modalContent += `<tr><td><strong>${displayChord}</strong></td><td>${formula.join(', ')}</td></tr>`;
         });
         modalContent += '</tbody>';
         modalContent += '</table>';
