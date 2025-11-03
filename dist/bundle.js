@@ -1447,6 +1447,35 @@
           return totalDistance;
         }
         /**
+         * Resolve semitone clashes within a voicing by octave-shifting the clashing tone
+         * that yields the smaller distance to the previous chord.
+         * Mirrors the Python algorithm's approach.
+         */
+        resolveSemitoneClashes(voicing, previousChordNotes) {
+          if (!voicing || voicing.length < 2) {
+            return [...voicing].sort((a3, b2) => a3 - b2);
+          }
+          let resolved = [...voicing].sort((a3, b2) => a3 - b2);
+          while (true) {
+            let clashFound = false;
+            for (let i3 = resolved.length - 2; i3 >= 0; i3--) {
+              if (resolved[i3 + 1] - resolved[i3] === 1) {
+                const optionA = [...resolved];
+                optionA[i3 + 1] = optionA[i3 + 1] + 12;
+                const optionB = [...resolved];
+                optionB[i3] = optionB[i3] - 12;
+                const distA = this.calculateVoicingDistance(previousChordNotes, optionA);
+                const distB = this.calculateVoicingDistance(previousChordNotes, optionB);
+                resolved = distA <= distB ? optionA : optionB;
+                clashFound = true;
+                break;
+              }
+            }
+            if (!clashFound) break;
+          }
+          return resolved.sort((a3, b2) => a3 - b2);
+        }
+        /**
          * Adjusts chord voicings to be closer to the target octave.
          * @param voicings - Array of chord voicings (arrays of MIDI notes).
          * @param baseOctave - The desired base octave (e.g., 3, 4).
@@ -1733,19 +1762,23 @@
                 if (!previousChordVoicing && currentChordVoicing.length > 1) {
                   currentChordVoicing = this.adjustVoicingsToTargetOctave([currentChordVoicing], baseOctave)[0];
                 } else if (previousChordVoicing && currentChordVoicing.length > 1) {
+                  const targetVoicing = [...previousChordVoicing].sort((a3, b2) => a3 - b2);
+                  const targetAverage = targetVoicing.reduce((acc, n3) => acc + n3, 0) / targetVoicing.length;
                   const possibleInversions = this.generateInversions(rootPositionNotes);
-                  let bestVoicing = currentChordVoicing;
+                  let bestVoicing = [...currentChordVoicing];
                   let minDistance = Infinity;
-                  const targetPreviousVoicing = this.adjustVoicingsToTargetOctave([previousChordVoicing], baseOctave)[0];
                   for (const inversion of possibleInversions) {
-                    const adjustedInversion = this.adjustVoicingsToTargetOctave([inversion], baseOctave)[0];
-                    const distance = this.calculateVoicingDistance(targetPreviousVoicing, adjustedInversion);
+                    const invAvg = inversion.reduce((acc, n3) => acc + n3, 0) / inversion.length;
+                    const octaveDifference = Math.round((targetAverage - invAvg) / 12);
+                    let candidate = inversion.map((n3) => n3 + octaveDifference * 12);
+                    candidate = this.resolveSemitoneClashes(candidate, targetVoicing);
+                    const distance = this.calculateVoicingDistance(targetVoicing, candidate);
                     if (distance < minDistance) {
                       minDistance = distance;
-                      bestVoicing = adjustedInversion;
+                      bestVoicing = candidate;
                     }
                   }
-                  currentChordVoicing = bestVoicing;
+                  currentChordVoicing = bestVoicing.sort((a3, b2) => a3 - b2);
                 } else {
                   currentChordVoicing = this.adjustVoicingsToTargetOctave([currentChordVoicing], baseOctave)[0];
                 }
