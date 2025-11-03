@@ -190,7 +190,7 @@ export class PianoRollDrawer {
         this.drawEmptyMessage(message, '#ef4444'); // red-500
     }
 
-    public renderChordButtons(chords: string[], chordDetails: { symbol: string; startTimeTicks: number; durationTicks: number; initialVoicing: number[]; adjustedVoicing: number[]; rootNoteName: string; isValid: boolean; }[]): void {
+    public renderChordButtons(chords: string[], chordDetails: { symbol: string; startTimeTicks: number; durationTicks: number; initialVoicing: number[]; adjustedVoicing: number[]; rootNoteName: string; isValid: boolean; calculatedBassNote: number | null; }[]): void {
         const buttonContainer = document.getElementById('chordButtonContainer');
         if (!buttonContainer) {
             console.error('Chord button container not found!');

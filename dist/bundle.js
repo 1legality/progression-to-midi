@@ -30322,54 +30322,38 @@
         const button = document.createElement("button");
         button.className = "btn btn-outline-primary m-1";
         button.textContent = chord;
-        button.addEventListener("mousedown", () => {
+        const play = () => {
           if (chordDetails && chordDetails[index2]) {
-            const midiNotes = chordDetails[index2].adjustedVoicing;
-            const activeNotes = synthChordPlayer.startChord(midiNotes);
-            activeNotesMap.set(index2, activeNotes);
+            const details = chordDetails[index2];
+            const notesForThisChord = lastGeneratedNotes.filter((note) => note.startTimeTicks === details.startTimeTicks);
+            const midiNotes = notesForThisChord.map((note) => note.midiNote);
+            if (midiNotes.length > 0) {
+              const activeNotes = synthChordPlayer.startChord(midiNotes);
+              activeNotesMap.set(index2, activeNotes);
+            }
           } else {
             console.warn(`No details available for chord at index ${index2}`);
           }
-        });
+        };
+        const stop = () => {
+          const activeNotes = activeNotesMap.get(index2);
+          if (activeNotes) {
+            synthChordPlayer.stopNotes(activeNotes);
+            activeNotesMap.delete(index2);
+          }
+        };
+        button.addEventListener("mousedown", play);
         button.addEventListener("touchstart", (event) => {
           event.preventDefault();
-          if (chordDetails && chordDetails[index2]) {
-            const midiNotes = chordDetails[index2].adjustedVoicing;
-            const activeNotes = synthChordPlayer.startChord(midiNotes);
-            activeNotesMap.set(index2, activeNotes);
-          } else {
-            console.warn(`No details available for chord at index ${index2}`);
-          }
+          play();
         });
-        button.addEventListener("mouseup", () => {
-          const activeNotes = activeNotesMap.get(index2);
-          if (activeNotes) {
-            synthChordPlayer.stopNotes(activeNotes);
-            activeNotesMap.delete(index2);
-          }
-        });
+        button.addEventListener("mouseup", stop);
         button.addEventListener("touchend", (event) => {
           event.preventDefault();
-          const activeNotes = activeNotesMap.get(index2);
-          if (activeNotes) {
-            synthChordPlayer.stopNotes(activeNotes);
-            activeNotesMap.delete(index2);
-          }
+          stop();
         });
-        button.addEventListener("mouseleave", () => {
-          const activeNotes = activeNotesMap.get(index2);
-          if (activeNotes) {
-            synthChordPlayer.stopNotes(activeNotes);
-            activeNotesMap.delete(index2);
-          }
-        });
-        button.addEventListener("touchcancel", () => {
-          const activeNotes = activeNotesMap.get(index2);
-          if (activeNotes) {
-            synthChordPlayer.stopNotes(activeNotes);
-            activeNotesMap.delete(index2);
-          }
-        });
+        button.addEventListener("mouseleave", stop);
+        button.addEventListener("touchcancel", stop);
         buttonContainer.appendChild(button);
       });
     };
