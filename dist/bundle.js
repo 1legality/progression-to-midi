@@ -35536,6 +35536,8 @@
     const downloadMidiOnlyButton = document.getElementById("downloadMidiOnlyButton");
     const copyUrlButton = document.getElementById("copyUrlButton");
     const chordIndicator = document.getElementById("chordIndicator");
+    const playProgressionButton = document.getElementById("playProgressionButton");
+    const stopProgressionButton = document.getElementById("stopProgressionButton");
     if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton || !copyUrlButton) {
       console.error("One or more required HTML elements not found!");
       if (statusDiv) statusDiv.textContent = "Error: Could not initialize the application (missing elements).";
@@ -35558,6 +35560,10 @@
     let lastGeneratedResult = null;
     let lastGeneratedNotes = [];
     let lastGeneratedMidiBlob = null;
+    let progressionTimeoutId = null;
+    let progressionIsPlaying = false;
+    let progressionIndex = 0;
+    let progressionActiveNotes = null;
     const resumeAudioContext = () => synthChordPlayer.ensureContextResumed();
     document.addEventListener("click", resumeAudioContext, { once: true });
     velocitySlider.addEventListener("input", (event) => {
@@ -35690,6 +35696,7 @@
           velocity: parseInt(formData.get("velocity"), 10)
         };
         const generationResult = midiGenerator.generate(options);
+        stopProgressionLoop();
         lastGeneratedResult = generationResult;
         lastGeneratedNotes = generationResult.notesForPianoRoll;
         const chordDetails = generationResult.chordDetails;
@@ -35717,6 +35724,120 @@
         pianoRollDrawer.drawErrorMessage("Error generating preview");
       }
     };
+    function getTempo() {
+      const tempoInput = document.getElementById("tempo");
+      const t3 = tempoInput ? parseInt(tempoInput.value, 10) : 120;
+      return isNaN(t3) || t3 <= 0 ? 120 : t3;
+    }
+    function buildProgressionSchedule() {
+      if (!lastGeneratedResult || !lastGeneratedResult.chordDetails) return [];
+      const tempo = getTempo();
+      const secPerTick = 60 / (tempo * TPQN);
+      const outputTypeEl = document.getElementById("outputType");
+      const outputType = outputTypeEl?.value || "chordsOnly";
+      return lastGeneratedResult.chordDetails.map((cd) => {
+        const durationSec = Math.max(0, cd.durationTicks) * secPerTick;
+        let eventNotes = [];
+        if (cd.isValid) {
+          switch (outputType) {
+            case "chordsOnly":
+              eventNotes = [...cd.adjustedVoicing || []];
+              break;
+            case "chordsAndBass":
+              eventNotes = [...cd.adjustedVoicing || []];
+              if (typeof cd.calculatedBassNote === "number" && !eventNotes.includes(cd.calculatedBassNote)) {
+                eventNotes.push(cd.calculatedBassNote);
+              }
+              break;
+            case "bassOnly":
+              if (typeof cd.calculatedBassNote === "number") {
+                eventNotes = [cd.calculatedBassNote];
+              } else {
+                eventNotes = [];
+              }
+              break;
+            case "bassAndFifth":
+              if (typeof cd.calculatedBassNote === "number") {
+                const bass = cd.calculatedBassNote;
+                const fifth = bass + 7;
+                eventNotes = [bass];
+                if (fifth >= 0 && fifth <= 127) {
+                  eventNotes.push(fifth);
+                }
+              } else {
+                eventNotes = [];
+              }
+              break;
+          }
+          eventNotes = eventNotes.filter((n2) => n2 >= 0 && n2 <= 127).sort((a3, b2) => a3 - b2);
+          eventNotes = [...new Set(eventNotes)];
+        } else {
+          eventNotes = [];
+        }
+        const label = cd.symbol || "";
+        return { notes: eventNotes, durationSec, label };
+      }).filter((item) => item.durationSec > 0);
+    }
+    function updateTransportUI() {
+      if (!playProgressionButton || !stopProgressionButton) return;
+      playProgressionButton.disabled = progressionIsPlaying;
+      stopProgressionButton.disabled = !progressionIsPlaying;
+    }
+    function showChordIndicator(text2, emphasize = false) {
+      if (!chordIndicator) return;
+      chordIndicator.textContent = text2;
+      chordIndicator.classList.toggle("text-primary", emphasize);
+      chordIndicator.classList.toggle("text-muted", !emphasize);
+    }
+    async function startProgressionLoop() {
+      if (progressionIsPlaying) return;
+      const schedule = buildProgressionSchedule();
+      if (schedule.length === 0) {
+        if (statusDiv) {
+          statusDiv.textContent = "Nothing to play. Generate a progression first.";
+          statusDiv.classList.add("text-danger");
+        }
+        return;
+      }
+      await synthChordPlayer.ensureContextResumed();
+      progressionIsPlaying = true;
+      updateTransportUI();
+      progressionIndex = 0;
+      const advance = () => {
+        if (!progressionIsPlaying) return;
+        const item = schedule[progressionIndex];
+        if (progressionActiveNotes) {
+          synthChordPlayer.stopNotes(progressionActiveNotes);
+          progressionActiveNotes = null;
+        }
+        if (item.notes.length > 0) {
+          progressionActiveNotes = synthChordPlayer.startChord(item.notes);
+          showChordIndicator(`Playing: ${item.label}`, true);
+        } else {
+          showChordIndicator("Rest", false);
+        }
+        const nextDelayMs = Math.max(10, item.durationSec * 1e3);
+        progressionTimeoutId = window.setTimeout(() => {
+          progressionIndex = (progressionIndex + 1) % schedule.length;
+          advance();
+        }, nextDelayMs);
+      };
+      advance();
+    }
+    function stopProgressionLoop() {
+      if (!progressionIsPlaying) return;
+      progressionIsPlaying = false;
+      if (progressionTimeoutId !== null) {
+        clearTimeout(progressionTimeoutId);
+        progressionTimeoutId = null;
+      }
+      if (progressionActiveNotes) {
+        synthChordPlayer.stopNotes(progressionActiveNotes);
+        progressionActiveNotes = null;
+      }
+      updateTransportUI();
+      showChordIndicator("Stopped", false);
+    }
     pianoRollDrawer.renderChordButtons = (chords, chordDetails) => {
       const buttonContainer = document.getElementById("chordButtonContainer");
       if (!buttonContainer) {
@@ -35772,6 +35893,18 @@
       event.preventDefault();
       handleGeneration(true);
     });
+    if (playProgressionButton) {
+      playProgressionButton.addEventListener("click", (e2) => {
+        e2.preventDefault();
+        startProgressionLoop();
+      });
+    }
+    if (stopProgressionButton) {
+      stopProgressionButton.addEventListener("click", (e2) => {
+        e2.preventDefault();
+        stopProgressionLoop();
+      });
+    }
     const downloadPdfButton = document.getElementById("downloadPdfButton");
     if (downloadPdfButton) {
       downloadPdfButton.addEventListener("click", async (event) => {
