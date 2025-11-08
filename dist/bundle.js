@@ -35586,7 +35586,16 @@
     const loadStateFromUrl = () => {
       const params = new URLSearchParams(window.location.search);
       if (params.toString() === "") return;
-      const setAndDispatch = (elementId, value) => {
+      const cleanParam = (val) => {
+        if (val === null) return null;
+        const trimmed = val.trim();
+        if (trimmed === "") return null;
+        const lowered = trimmed.toLowerCase();
+        if (lowered === "undefined" || lowered === "null" || lowered === "nan") return null;
+        return trimmed;
+      };
+      const setAndDispatch = (elementId, rawValue) => {
+        const value = cleanParam(rawValue);
         if (value === null) return;
         const element = document.getElementById(elementId);
         if (element) {
@@ -35602,8 +35611,9 @@
       setAndDispatch("chordDuration", params.get("chordDuration"));
       setAndDispatch("velocity", params.get("velocity"));
       setAndDispatch("outputFileName", params.get("outputFileName"));
-      const velocity = params.get("velocity");
-      if (velocity && velocityValueSpan) {
+      const velocityRaw = params.get("velocity");
+      const velocity = cleanParam(velocityRaw);
+      if (velocity !== null && velocityValueSpan) {
         velocityValueSpan.textContent = velocity;
       }
       handleGeneration(false);

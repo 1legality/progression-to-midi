@@ -103,9 +103,20 @@ export function setupChordProgressionSequencer() {
         const params = new URLSearchParams(window.location.search);
         if (params.toString() === '') return; // No params, do nothing
 
+        // Normalize incoming param values. Treat empty/undefined/null/NaN as absent.
+        const cleanParam = (val: string | null): string | null => {
+            if (val === null) return null;
+            const trimmed = val.trim();
+            if (trimmed === '') return null;
+            const lowered = trimmed.toLowerCase();
+            if (lowered === 'undefined' || lowered === 'null' || lowered === 'nan') return null;
+            return trimmed;
+        };
+
         // Helper to set value and dispatch change event
-        const setAndDispatch = (elementId: string, value: string | null) => {
-            if (value === null) return;
+        const setAndDispatch = (elementId: string, rawValue: string | null) => {
+            const value = cleanParam(rawValue);
+            if (value === null) return; // Ignore missing/empty values to preserve defaults
             const element = document.getElementById(elementId) as HTMLInputElement | HTMLSelectElement;
             if (element) {
                 element.value = value;
@@ -122,9 +133,10 @@ export function setupChordProgressionSequencer() {
         setAndDispatch('velocity', params.get('velocity'));
         setAndDispatch('outputFileName', params.get('outputFileName'));
 
-        // For the velocity slider, also update the display span
-        const velocity = params.get('velocity');
-        if (velocity && velocityValueSpan) {
+        // For the velocity slider, also update the display span (allow "0")
+        const velocityRaw = params.get('velocity');
+        const velocity = cleanParam(velocityRaw);
+        if (velocity !== null && velocityValueSpan) {
             velocityValueSpan.textContent = velocity;
         }
         
