@@ -37,9 +37,10 @@ export function setupChordProgressionSequencer() {
     const velocityValueSpan = document.getElementById('velocityValue');
     const pianoRollCanvas = document.getElementById('pianoRollCanvas') as HTMLCanvasElement | null;
     const downloadMidiOnlyButton = document.getElementById('downloadMidiOnlyButton') as HTMLButtonElement | null;
+    const copyUrlButton = document.getElementById('copyUrlButton') as HTMLButtonElement | null;
     const chordIndicator = document.getElementById('chordIndicator');
 
-    if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton) {
+    if (!form || !statusDiv || !velocitySlider || !velocityValueSpan || !pianoRollCanvas || !downloadMidiOnlyButton || !copyUrlButton) {
         console.error("One or more required HTML elements not found!");
         if (statusDiv) statusDiv.textContent = "Error: Could not initialize the application (missing elements).";
         return;
@@ -71,6 +72,74 @@ export function setupChordProgressionSequencer() {
     // --- Update velocity display ---
     velocitySlider.addEventListener('input', (event) => {
         velocityValueSpan.textContent = (event.target as HTMLInputElement).value;
+    });
+
+    // --- URL State Management ---
+    const updateUrlWithState = () => {
+        const formData = new FormData(form);
+        const params = new URLSearchParams();
+        params.set('progression', formData.get('progression') as string);
+        params.set('outputType', formData.get('outputType') as string);
+        params.set('inversionType', formData.get('inversionType') as string);
+        params.set('tempo', formData.get('tempo') as string);
+        params.set('baseOctave', formData.get('baseOctave') as string);
+        params.set('chordDuration', formData.get('chordDuration') as string);
+        params.set('velocity', formData.get('velocity') as string);
+        params.set('outputFileName', formData.get('outputFileName') as string);
+
+        const newUrl = `${window.location.pathname}?${params.toString()}`;
+        history.pushState({}, '', newUrl);
+    };
+
+    const loadStateFromUrl = () => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.toString() === '') return; // No params, do nothing
+
+        // Helper to set value and dispatch change event
+        const setAndDispatch = (elementId: string, value: string | null) => {
+            if (value === null) return;
+            const element = document.getElementById(elementId) as HTMLInputElement | HTMLSelectElement;
+            if (element) {
+                element.value = value;
+                element.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        };
+
+        setAndDispatch('progression', params.get('progression'));
+        setAndDispatch('outputType', params.get('outputType'));
+        setAndDispatch('inversionType', params.get('inversionType'));
+        setAndDispatch('tempo', params.get('tempo'));
+        setAndDispatch('baseOctave', params.get('baseOctave'));
+        setAndDispatch('chordDuration', params.get('chordDuration'));
+        setAndDispatch('velocity', params.get('velocity'));
+        setAndDispatch('outputFileName', params.get('outputFileName'));
+
+        // For the velocity slider, also update the display span
+        const velocity = params.get('velocity');
+        if (velocity && velocityValueSpan) {
+            velocityValueSpan.textContent = velocity;
+        }
+        
+        handleGeneration(false); // Generate preview from URL state
+    };
+
+    copyUrlButton.addEventListener('click', () => {
+        const url = window.location.href;
+        navigator.clipboard.writeText(url).then(() => {
+            const originalText = copyUrlButton.innerHTML;
+            copyUrlButton.innerHTML = '<i class="bi bi-check-lg"></i> Copied!';
+            copyUrlButton.classList.add('btn-success');
+            copyUrlButton.classList.remove('btn-info');
+            setTimeout(() => {
+                copyUrlButton.innerHTML = originalText;
+                copyUrlButton.classList.remove('btn-success');
+                copyUrlButton.classList.add('btn-info');
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy URL: ', err);
+            statusDiv.textContent = 'Failed to copy URL.';
+            statusDiv.classList.add('text-danger');
+        });
     });
 
     // Update chord button click logic to show a visual indicator
@@ -189,6 +258,8 @@ export function setupChordProgressionSequencer() {
                 statusDiv.textContent = `Preview generated.`;
                 statusDiv.classList.replace('text-muted', 'text-success'); // Bootstrap's text-success for success
             }
+            
+            updateUrlWithState(); // Update URL after successful generation
 
         } catch (error: any) {
             console.error(`Error during MIDI generation (${actionText}):`, error);
@@ -357,4 +428,7 @@ export function setupChordProgressionSequencer() {
             modal.show();
         });
     }
+
+    // --- Load initial state from URL ---
+    loadStateFromUrl();
 }
