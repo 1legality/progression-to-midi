@@ -35569,17 +35569,24 @@
     velocitySlider.addEventListener("input", (event) => {
       velocityValueSpan.textContent = event.target.value;
     });
+    let isApplyingUrlState = false;
     const updateUrlWithState = () => {
       const formData = new FormData(form);
       const params = new URLSearchParams();
-      params.set("progression", formData.get("progression"));
-      params.set("outputType", formData.get("outputType"));
-      params.set("inversionType", formData.get("inversionType"));
-      params.set("tempo", formData.get("tempo"));
-      params.set("baseOctave", formData.get("baseOctave"));
-      params.set("chordDuration", formData.get("chordDuration"));
-      params.set("velocity", formData.get("velocity"));
-      params.set("outputFileName", formData.get("outputFileName"));
+      const safeSet = (key, val) => {
+        if (val === null) return;
+        const str = String(val).trim();
+        if (!str || str.toLowerCase() === "undefined" || str.toLowerCase() === "null" || str.toLowerCase() === "nan") return;
+        params.set(key, str);
+      };
+      safeSet("progression", formData.get("progression"));
+      safeSet("outputType", formData.get("outputType"));
+      safeSet("inversionType", formData.get("inversionType"));
+      safeSet("tempo", formData.get("tempo"));
+      safeSet("baseOctave", formData.get("baseOctave"));
+      safeSet("chordDuration", formData.get("chordDuration"));
+      safeSet("velocity", formData.get("velocity"));
+      safeSet("outputFileName", formData.get("outputFileName"));
       const newUrl = `${window.location.pathname}?${params.toString()}`;
       history.pushState({}, "", newUrl);
     };
@@ -35594,28 +35601,29 @@
         if (lowered === "undefined" || lowered === "null" || lowered === "nan") return null;
         return trimmed;
       };
-      const setAndDispatch = (elementId, rawValue) => {
+      isApplyingUrlState = true;
+      const setValueOnly = (elementId, rawValue) => {
         const value = cleanParam(rawValue);
         if (value === null) return;
         const element = document.getElementById(elementId);
         if (element) {
           element.value = value;
-          element.dispatchEvent(new Event("change", { bubbles: true }));
         }
       };
-      setAndDispatch("progression", params.get("progression"));
-      setAndDispatch("outputType", params.get("outputType"));
-      setAndDispatch("inversionType", params.get("inversionType"));
-      setAndDispatch("tempo", params.get("tempo"));
-      setAndDispatch("baseOctave", params.get("baseOctave"));
-      setAndDispatch("chordDuration", params.get("chordDuration"));
-      setAndDispatch("velocity", params.get("velocity"));
-      setAndDispatch("outputFileName", params.get("outputFileName"));
+      setValueOnly("progression", params.get("progression"));
+      setValueOnly("outputType", params.get("outputType"));
+      setValueOnly("inversionType", params.get("inversionType"));
+      setValueOnly("tempo", params.get("tempo"));
+      setValueOnly("baseOctave", params.get("baseOctave"));
+      setValueOnly("chordDuration", params.get("chordDuration"));
+      setValueOnly("velocity", params.get("velocity"));
+      setValueOnly("outputFileName", params.get("outputFileName"));
       const velocityRaw = params.get("velocity");
       const velocity = cleanParam(velocityRaw);
       if (velocity !== null && velocityValueSpan) {
         velocityValueSpan.textContent = velocity;
       }
+      isApplyingUrlState = false;
       handleGeneration(false);
     };
     copyUrlButton.addEventListener("click", () => {
@@ -35953,6 +35961,7 @@
     const formInputs = form.querySelectorAll("input, select, textarea");
     formInputs.forEach((input) => {
       input.addEventListener("change", () => {
+        if (isApplyingUrlState) return;
         handleGeneration(false);
       });
     });

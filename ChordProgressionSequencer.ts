@@ -83,17 +83,27 @@ export function setupChordProgressionSequencer() {
     });
 
     // --- URL State Management ---
+    // Guard to avoid triggering generation while applying URL state
+    let isApplyingUrlState = false;
     const updateUrlWithState = () => {
         const formData = new FormData(form);
         const params = new URLSearchParams();
-        params.set('progression', formData.get('progression') as string);
-        params.set('outputType', formData.get('outputType') as string);
-        params.set('inversionType', formData.get('inversionType') as string);
-        params.set('tempo', formData.get('tempo') as string);
-        params.set('baseOctave', formData.get('baseOctave') as string);
-        params.set('chordDuration', formData.get('chordDuration') as string);
-        params.set('velocity', formData.get('velocity') as string);
-        params.set('outputFileName', formData.get('outputFileName') as string);
+
+        const safeSet = (key: string, val: FormDataEntryValue | null) => {
+            if (val === null) return;
+            const str = String(val).trim();
+            if (!str || str.toLowerCase() === 'undefined' || str.toLowerCase() === 'null' || str.toLowerCase() === 'nan') return;
+            params.set(key, str);
+        };
+
+        safeSet('progression', formData.get('progression'));
+        safeSet('outputType', formData.get('outputType'));
+        safeSet('inversionType', formData.get('inversionType'));
+        safeSet('tempo', formData.get('tempo'));
+        safeSet('baseOctave', formData.get('baseOctave'));
+        safeSet('chordDuration', formData.get('chordDuration'));
+        safeSet('velocity', formData.get('velocity'));
+        safeSet('outputFileName', formData.get('outputFileName'));
 
         const newUrl = `${window.location.pathname}?${params.toString()}`;
         history.pushState({}, '', newUrl);
@@ -113,25 +123,24 @@ export function setupChordProgressionSequencer() {
             return trimmed;
         };
 
-        // Helper to set value and dispatch change event
-        const setAndDispatch = (elementId: string, rawValue: string | null) => {
+        isApplyingUrlState = true;
+        const setValueOnly = (elementId: string, rawValue: string | null) => {
             const value = cleanParam(rawValue);
             if (value === null) return; // Ignore missing/empty values to preserve defaults
             const element = document.getElementById(elementId) as HTMLInputElement | HTMLSelectElement;
             if (element) {
                 element.value = value;
-                element.dispatchEvent(new Event('change', { bubbles: true }));
             }
         };
 
-        setAndDispatch('progression', params.get('progression'));
-        setAndDispatch('outputType', params.get('outputType'));
-        setAndDispatch('inversionType', params.get('inversionType'));
-        setAndDispatch('tempo', params.get('tempo'));
-        setAndDispatch('baseOctave', params.get('baseOctave'));
-        setAndDispatch('chordDuration', params.get('chordDuration'));
-        setAndDispatch('velocity', params.get('velocity'));
-        setAndDispatch('outputFileName', params.get('outputFileName'));
+        setValueOnly('progression', params.get('progression'));
+        setValueOnly('outputType', params.get('outputType'));
+        setValueOnly('inversionType', params.get('inversionType'));
+        setValueOnly('tempo', params.get('tempo'));
+        setValueOnly('baseOctave', params.get('baseOctave'));
+        setValueOnly('chordDuration', params.get('chordDuration'));
+        setValueOnly('velocity', params.get('velocity'));
+        setValueOnly('outputFileName', params.get('outputFileName'));
 
         // For the velocity slider, also update the display span (allow "0")
         const velocityRaw = params.get('velocity');
@@ -139,7 +148,8 @@ export function setupChordProgressionSequencer() {
         if (velocity !== null && velocityValueSpan) {
             velocityValueSpan.textContent = velocity;
         }
-        
+
+        isApplyingUrlState = false;
         handleGeneration(false); // Generate preview from URL state
     };
 
@@ -563,6 +573,7 @@ export function setupChordProgressionSequencer() {
     const formInputs = form.querySelectorAll('input, select, textarea');
     formInputs.forEach(input => {
         input.addEventListener('change', () => {
+            if (isApplyingUrlState) return; // Skip auto-generate while loading URL state
             handleGeneration(false); // Generate preview automatically
         });
     });
