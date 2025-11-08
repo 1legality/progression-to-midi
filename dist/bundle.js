@@ -35606,13 +35606,13 @@
       const url = window.location.href;
       navigator.clipboard.writeText(url).then(() => {
         const originalText = copyUrlButton.innerHTML;
-        copyUrlButton.innerHTML = '<i class="bi bi-check-lg"></i> Copied!';
+        copyUrlButton.innerHTML = "Copied!";
         copyUrlButton.classList.add("btn-success");
-        copyUrlButton.classList.remove("btn-info");
+        copyUrlButton.classList.remove("btn-secondary");
         setTimeout(() => {
           copyUrlButton.innerHTML = originalText;
           copyUrlButton.classList.remove("btn-success");
-          copyUrlButton.classList.add("btn-info");
+          copyUrlButton.classList.add("btn-secondary");
         }, 2e3);
       }).catch((err2) => {
         console.error("Failed to copy URL: ", err2);
